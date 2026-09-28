@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Deployment Buddy</title>
+    <style>
+      :root {
+        --border: #d0d5dd;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --text: #1a1f29;
+        --muted: #667085;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --ok: #16803c;
+        --warn: #b54708;
+        --danger: #b91c1c;
+        --placeholder: #fdf0d5;
+        --locked: #e0e7ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+        flex: 1;
+        min-width: 200px;
+      }
+      header .file-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      nav.tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 20px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      nav.tabs button {
+        border: none;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        padding: 10px 14px;
+        white-space: nowrap;
+      }
+      nav.tabs button.active {
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+      }
+      main {
+        padding: 16px 20px 60px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .panel {
+        display: none;
+      }
+      .panel.active {
+        display: block;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: var(--panel);
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 6px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #eef1f5;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+      }
+      td input,
+      td select {
+        width: 100%;
+        border: none;
+        background: transparent;
+        font: inherit;
+        padding: 2px;
+      }
+      td input:focus,
+      td select:focus {
+        outline: 2px solid var(--accent);
+        background: white;
+      }
+      .table-wrap {
+        overflow: auto;
+        max-height: 70vh;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin: 10px 0;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .status {
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin: 10px 0;
+      }
+      .status.info {
+        background: #eef2ff;
+        color: #3730a3;
+      }
+      .status.ok {
+        background: #ecfdf3;
+        color: var(--ok);
+      }
+      .status.error {
+        background: #fef3f2;
+        color: var(--danger);
+      }
+      .status ul {
+        margin: 6px 0 0 18px;
+        padding: 0;
+      }
+      .layer-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .layer-card .badge {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .badge.hard {
+        background: #fef3f2;
+        color: var(--danger);
+      }
+      .badge.soft {
+        background: #eef2ff;
+        color: var(--accent);
+      }
+      .layer-card .body {
+        flex: 1;
+      }
+      .layer-card .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .layer-card p {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      .layer-card .weight-field {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .layer-card .weight-field input {
+        width: 70px;
+      }
+      .deployment-level h2 {
+        font-size: 15px;
+        margin: 20px 0 8px;
+      }
+      .deployment-blocks {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .deployment-block {
+        flex: 1;
+        min-width: 260px;
+      }
+      .deployment-block h3 {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+      .deployment-block table {
+        font-size: 13px;
+      }
+      .row-incomplete {
+        background: #fef3f2;
+      }
+      .row-placeholder {
+        background: var(--placeholder);
+      }
+      .row-locked td.lock-cell {
+        background: var(--locked);
+      }
+      .lock-toggle {
+        cursor: pointer;
+      }
+      .load-panel {
+        margin-top: 16px;
+      }
+      .load-bar-track {
+        background: #e4e7ec;
+        border-radius: 4px;
+        height: 8px;
+        overflow: hidden;
+      }
+      .load-bar-fill {
+        height: 100%;
+        background: var(--accent);
+      }
+      .load-bar-fill.over {
+        background: var(--danger);
+      }
+      .versions-list li {
+        margin-bottom: 8px;
+      }
+      #file-input {
+        display: none;
+      }
+      footer {
+        text-align: center;
+        color: var(--muted);
+        padding: 20px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>My Deployment Buddy</h1>
+      <div class="file-actions">
+        <button
+          id="btn-load-sample"
+          title="Load the built-in fictional sample school"
+        >
+          Load sample
+        </button>
+        <button id="btn-import">Open from Excel…</button>
+        <input type="file" id="file-input" accept=".xlsx" />
+        <button id="btn-export">Save to Excel</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-tab="teachers" class="active">Teachers</button>
+      <button data-tab="groups">Groups</button>
+      <button data-tab="layers">Layers</button>
+      <button data-tab="deployment">Deployment View</button>
+      <button data-tab="versions">Versions</button>
+    </nav>
+
+    <main>
+      <section id="panel-teachers" class="panel active">
+        <div class="toolbar">
+          <button id="btn-add-teacher">+ Add teacher</button>
+        </div>
+        <div class="table-wrap">
+          <table id="table-teachers">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Max periods</th>
+                <th>Subjects (comma-separated)</th>
+                <th>Placeholder?</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-groups" class="panel">
+        <div class="toolbar">
+          <button id="btn-add-group">+ Add group</button>
+        </div>
+        <div class="table-wrap">
+          <table id="table-groups">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Block</th>
+                <th>Label</th>
+                <th>Periods</th>
+                <th>Teachers needed</th>
+                <th>Band</th>
+                <th>Category</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-layers" class="panel">
+        <div class="toolbar">
+          <button id="btn-solve" class="primary">Solve</button>
+        </div>
+        <div id="solve-status"></div>
+        <div id="layers-list"></div>
+      </section>
+
+      <section id="panel-deployment" class="panel">
+        <div id="deployment-view"></div>
+        <div class="load-panel">
+          <h2>Teacher load</h2>
+          <div id="load-panel"></div>
+        </div>
+      </section>
+
+      <section id="panel-versions" class="panel">
+        <div class="toolbar">
+          <input
+            type="text"
+            id="version-name"
+            placeholder="Version name, e.g. 'v3 - after Mr Tan's request'"
+            style="
+              flex: 1;
+              min-width: 220px;
+              padding: 6px 10px;
+              border: 1px solid var(--border);
+              border-radius: 6px;
+            "
+          />
+          <button id="btn-save-version">Save version</button>
+        </div>
+        <ul class="versions-list" id="versions-list"></ul>
+      </section>
+    </main>
+
+    <footer>
+      Runs entirely in this browser - no data is sent anywhere. Save to Excel to
+      keep your work.
+    </footer>
+
+    <!-- Vendored libraries (classic scripts, not ES modules - see CLAUDE.md). -->
+    <script src="src/vendor/xlsx/xlsx.full.min.js"></script>
+    <script type="module" src="src/ui.js"></script>
+  </body>
+</html>

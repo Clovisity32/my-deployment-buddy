@@ -1,0 +1,13 @@
+node_modules/
+*.xlsx
+!sample/*.xlsx
+test-results/
+playwright-report/
+.DS_Store
+Thumbs.db
+
+# Real school data - never commit (contains actual teacher names / PDPA)
+Current Deployment Layout.png
+Current Deployment Layout.lnk
+/data/
+*.local.json

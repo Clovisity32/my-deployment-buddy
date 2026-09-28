@@ -1,0 +1,17 @@
+{
+  "name": "my-deployment-buddy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Science HOD teacher deployment solver (browser-only MILP solver, layered constraints)",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "serve": "http-server -p 8080 -c-1",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "highs": "^1.15.3",
+    "http-server": "^14.1.1"
+  }
+}
