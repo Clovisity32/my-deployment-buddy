@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <button id="load">Load</button>
+    <button id="save">Save</button>
+    <pre id="data-out"></pre>
+    <span id="status-out"></span>
+    <script type="module">
+      import { signInWithGoogle } from "../../../src/auth.js";
+      import {
+        initStore,
+        getData,
+        setData,
+        onSaveStatusChange,
+      } from "../../../src/ui/store.js";
+
+      onSaveStatusChange(({ status, message }) => {
+        document.getElementById("status-out").textContent = message
+          ? `${status}: ${message}`
+          : status;
+      });
+
+      document.getElementById("load").addEventListener("click", async () => {
+        await signInWithGoogle();
+        await initStore();
+        document.getElementById("data-out").textContent =
+          JSON.stringify(getData());
+      });
+
+      document.getElementById("save").addEventListener("click", () => {
+        setData({
+          ...getData(),
+          roles: [{ id: "r1", name: "Test Role", maxPeriods: 10 }],
+        });
+      });
+    </script>
+  </body>
+</html>
