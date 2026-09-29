@@ -75,8 +75,7 @@ async function initStore() {
   const snap = await getDoc(mainDocRef());
   const fetched = snap.exists() ? snap.data() : emptyDeploymentDoc();
   loadedUpdatedAt = fetched.updatedAt || null;
-  const { updatedAt, updatedBy, ...rest } = fetched;
-  data = rest;
+  data = stripMeta(fetched);
 }
 
 class ConflictError extends Error {
@@ -90,6 +89,17 @@ function stripMeta({ updatedAt, updatedBy, ...rest }) {
   return rest;
 }
 
+// null means "no doc existed yet when I loaded" - that is itself a value to
+// compare, not a reason to skip the check. Treating "I loaded empty" and
+// "a doc now exists" as compatible is exactly the bug this guards against:
+// two clients both starting from a fresh (nonexistent) doc must still
+// conflict when the second one saves after the first created it.
+function timestampsEqual(a, b) {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return a.isEqual ? a.isEqual(b) : a === b;
+}
+
 async function writeToFirestore(next) {
   const ref = mainDocRef();
   const user = getCurrentUser();
@@ -98,12 +108,7 @@ async function writeToFirestore(next) {
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       const serverUpdatedAt = snap.exists() ? snap.data().updatedAt : null;
-      const bothPresent = loadedUpdatedAt && serverUpdatedAt;
-      const changed =
-        bothPresent &&
-        !(serverUpdatedAt.isEqual
-          ? serverUpdatedAt.isEqual(loadedUpdatedAt)
-          : serverUpdatedAt === loadedUpdatedAt);
+      const changed = !timestampsEqual(loadedUpdatedAt, serverUpdatedAt);
       if (changed) {
         throw new ConflictError(snap.data().updatedBy);
       }
@@ -120,8 +125,7 @@ async function writeToFirestore(next) {
     if (err instanceof ConflictError) {
       blocked = true;
       const snap = await getDoc(ref);
-      const { updatedAt, updatedBy, ...rest } = snap.data();
-      data = rest;
+      data = stripMeta(snap.data());
       listeners.forEach((fn) => fn());
       notifyStatus(
         "conflict",

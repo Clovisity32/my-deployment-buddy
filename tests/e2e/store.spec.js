@@ -67,32 +67,66 @@ async function signInAsHod(page, email = "hod@example.com") {
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 
-test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
-  page,
-}) => {
+// #load triggers signInWithGoogle() directly, which opens the Auth
+// emulator's real IDP Login Widget popup - it is not auto-accepted (see
+// Task 3's auth.spec.js comment for how this was verified).
+async function loadHarnessAndSignIn(page, email = "hod@example.com") {
   await page.goto("/tests/e2e/fixtures/store-harness.html?emulators=1");
-  // #load triggers signInWithGoogle() directly, which opens the Auth
-  // emulator's real IDP Login Widget popup - it is not auto-accepted (see
-  // Task 3's auth.spec.js comment for how this was verified).
   const popupPromise = page.context().waitForEvent("page");
   await page.click("#load");
   const popup = await popupPromise;
   await popup.waitForLoadState();
-  const existing = popup.locator(
-    '.js-reuse-account:has-text("hod@example.com")',
-  );
+  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
   if ((await existing.count()) > 0) {
     await existing.first().click();
   } else {
     await popup.click("#add-account-button");
-    await popup.fill("#email-input", "hod@example.com");
+    await popup.fill("#email-input", email);
     await popup.click("#sign-in");
   }
   await expect(page.locator("#data-out")).not.toHaveText("", {
     timeout: 10000,
   });
+}
+
+test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
+  page,
+}) => {
+  await loadHarnessAndSignIn(page);
   await page.click("#save");
   await expect(page.locator("#status-out")).toHaveText("saved", {
+    timeout: 10000,
+  });
+});
+
+test("two clients both starting from a not-yet-created doc: the second save is blocked, not silently merged", async ({
+  context,
+}) => {
+  // Guarantee deployments/main does not exist yet, regardless of what
+  // earlier tests in this run created - the Firestore emulator's clear-data
+  // endpoint wipes every document for this project. This is the exact race
+  // the conflict guard must catch: two clients that both loaded when there
+  // was no doc yet (loadedUpdatedAt === null on both) must still conflict
+  // once one of them has created it.
+  await fetch(
+    "http://127.0.0.1:8081/emulator/v1/projects/demo-my-deployment-buddy/databases/(default)/documents",
+    { method: "DELETE" },
+  );
+
+  const pageA = await context.newPage();
+  const pageB = await context.newPage();
+  await loadHarnessAndSignIn(pageA);
+  await loadHarnessAndSignIn(pageB);
+
+  await pageA.click("#save");
+  await expect(pageA.locator("#status-out")).toHaveText("saved", {
+    timeout: 10000,
+  });
+
+  // B still holds loadedUpdatedAt = null, but the doc now exists (created
+  // by A) - this must be treated as a conflict, not silently overwritten.
+  await pageB.click("#save");
+  await expect(pageB.locator("#status-out")).toContainText("conflict", {
     timeout: 10000,
   });
 });
