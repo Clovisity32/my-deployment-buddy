@@ -13,9 +13,5 @@ Current Deployment Layout.lnk
 *.local.json
 
 # Firebase test-project service-account key - never commit (see
-# docs/superpowers/specs/2026-09-29-firestore-sync-design.md). Firebase
-# Console's "Generate new private key" download is named like
-# {project-id}-firebase-adminsdk-{id}-{hash}.json - match that pattern,
-# not just a hand-chosen filename nobody's likely to actually use.
-*firebase-adminsdk*.json
+# docs/superpowers/specs/2026-09-29-firestore-sync-design.md)
 firebase-service-account*.json

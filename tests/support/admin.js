@@ -34,8 +34,7 @@ async function mintCustomToken(email) {
   let user;
   try {
     user = await auth.getUserByEmail(email);
-  } catch (err) {
-    if (err.code !== "auth/user-not-found") throw err;
+  } catch {
     user = await auth.createUser({ email });
   }
   return auth.createCustomToken(user.uid);
