@@ -8,9 +8,40 @@ import {
   explainConstraint,
 } from "../../src/diagnose.js";
 
+// Schema v2: teachers carry roleId/capOverride/qualifications (subject ids)
+// instead of maxPeriods/subjects; groups carry subjectId, and per-subject
+// capacity checks look subject names up in data.subjects.
+const role1 = { id: "role1", name: "Role 1", maxPeriods: null };
+const chemSubject = {
+  id: "chem",
+  name: "Chem",
+  discipline: "CHEM",
+  stream: "G1",
+  periods: 4,
+  levels: [3],
+};
+const phySubject = {
+  id: "phy",
+  name: "Phy",
+  discipline: "PHY",
+  stream: "G1",
+  periods: 4,
+  levels: [3],
+};
+
 test("preCheck() names a group with no qualified teacher", () => {
   const data = {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 20, subjects: ["Chem"] }],
+    roles: [role1],
+    subjects: [chemSubject],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 20,
+        qualifications: ["chem"],
+      },
+    ],
     groups: [
       {
         id: "g1",
@@ -20,6 +51,7 @@ test("preCheck() names a group with no qualified teacher", () => {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "bio",
       },
     ],
     assignments: [],
@@ -31,9 +63,19 @@ test("preCheck() names a group with no qualified teacher", () => {
   assert.match(issues[0], /Bio/);
 });
 
-test("preCheck() flags a subject block that needs more periods than qualified teachers can give", () => {
+test("preCheck() flags a subject that needs more periods than qualified teachers can give", () => {
   const data = {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 10, subjects: ["Chem"] }],
+    roles: [role1],
+    subjects: [chemSubject],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 10,
+        qualifications: ["chem"],
+      },
+    ],
     groups: [
       {
         id: "g1",
@@ -43,6 +85,7 @@ test("preCheck() flags a subject block that needs more periods than qualified te
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
       {
         id: "g2",
@@ -52,6 +95,7 @@ test("preCheck() flags a subject block that needs more periods than qualified te
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
     ],
     assignments: [],
@@ -63,12 +107,21 @@ test("preCheck() flags a subject block that needs more periods than qualified te
   assert.match(issues[0], /at most 10/);
 });
 
-test("preCheck() catches an overall overload that per-block capacity double-counts away", () => {
-  // A dual-subject teacher's maxPeriods is counted in full for BOTH blocks'
-  // per-block capacity, so per-block checks alone can miss a real overload.
+test("preCheck() catches an overall overload that per-subject capacity double-counts away", () => {
+  // A dual-subject teacher's cap is counted in full for BOTH subjects'
+  // per-subject capacity, so per-subject checks alone can miss a real
+  // overload.
   const data = {
+    roles: [role1],
+    subjects: [chemSubject, phySubject],
     teachers: [
-      { id: "t1", name: "Amy", maxPeriods: 8, subjects: ["Chem", "Phy"] },
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["chem", "phy"],
+      },
     ],
     groups: [
       {
@@ -79,6 +132,7 @@ test("preCheck() catches an overall overload that per-block capacity double-coun
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
       {
         id: "g2",
@@ -88,6 +142,7 @@ test("preCheck() catches an overall overload that per-block capacity double-coun
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "phy",
       },
     ],
     assignments: [],
@@ -103,7 +158,17 @@ test("preCheck() catches an overall overload that per-block capacity double-coun
 
 test("preCheck() finds nothing wrong with a feasible model", () => {
   const data = {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 20, subjects: ["Chem"] }],
+    roles: [role1],
+    subjects: [chemSubject],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 20,
+        qualifications: ["chem"],
+      },
+    ],
     groups: [
       {
         id: "g1",
@@ -113,6 +178,7 @@ test("preCheck() finds nothing wrong with a feasible model", () => {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
     ],
     assignments: [],
@@ -122,7 +188,18 @@ test("preCheck() finds nothing wrong with a feasible model", () => {
 
 test("explainConstraint() renders a plain-language sentence for each hard-layer prefix", () => {
   const data = {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 20, subjects: ["Chem"] }],
+    roles: [role1],
+    subjects: [chemSubject],
+    bands: [{ id: "bandA", name: "Band A", classIds: [], subjects: [] }],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 20,
+        qualifications: ["chem"],
+      },
+    ],
     groups: [
       {
         id: "g1",
@@ -132,6 +209,7 @@ test("explainConstraint() renders a plain-language sentence for each hard-layer 
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
     ],
   };
@@ -147,6 +225,14 @@ test("explainConstraint() renders a plain-language sentence for each hard-layer 
     /A locked assignment/,
   );
   assert.match(
+    explainConstraint("bandClash_bandA_t1", data, 1),
+    /Amy would need to be in two places at once for band "Band A"/,
+  );
+  assert.match(
+    explainConstraint("bandClash_unknownBand_t1", data, 1),
+    /A teacher would need to be in two places at once within a band/,
+  );
+  assert.match(
     explainConstraint("unknown_thing", data, 1),
     /could not be satisfied/,
   );
@@ -154,9 +240,23 @@ test("explainConstraint() renders a plain-language sentence for each hard-layer 
 
 test("diagnoseInfeasibility() falls back to an elastic re-solve for a lock-vs-load-cap conflict aggregate checks would miss", async () => {
   const data = {
+    roles: [role1],
+    subjects: [chemSubject],
     teachers: [
-      { id: "t1", name: "Amy", maxPeriods: 8, subjects: ["Chem"] },
-      { id: "t2", name: "Ben", maxPeriods: 8, subjects: ["Chem"] }, // spare capacity - aggregate checks pass
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["chem"],
+      },
+      {
+        id: "t2",
+        name: "Ben",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["chem"],
+      }, // spare capacity - aggregate checks pass
     ],
     groups: [
       {
@@ -167,6 +267,7 @@ test("diagnoseInfeasibility() falls back to an elastic re-solve for a lock-vs-lo
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
       {
         id: "gB",
@@ -176,6 +277,7 @@ test("diagnoseInfeasibility() falls back to an elastic re-solve for a lock-vs-lo
         periods: 6,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
     ],
     // Both locked onto the same teacher: 6 + 6 = 12 periods > Amy's cap of 8.
@@ -212,7 +314,17 @@ test("diagnoseInfeasibility() falls back to an elastic re-solve for a lock-vs-lo
 
 test("diagnoseInfeasibility() prefers the fast pre-check over the elastic re-solve when both would find the issue", async () => {
   const data = {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 20, subjects: ["Chem"] }],
+    roles: [role1],
+    subjects: [chemSubject],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 20,
+        qualifications: ["chem"],
+      },
+    ],
     groups: [
       {
         id: "g1",
@@ -222,6 +334,7 @@ test("diagnoseInfeasibility() prefers the fast pre-check over the elastic re-sol
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "bio",
       },
     ],
     assignments: [],
@@ -230,4 +343,72 @@ test("diagnoseInfeasibility() prefers the fast pre-check over the elastic re-sol
   const diagnosis = await diagnoseInfeasibility(data, model);
   assert.equal(diagnosis.method, "precheck");
   assert.equal(diagnosis.issues.length, 1);
+});
+
+test("diagnoseInfeasibility() falls back to an elastic re-solve for a band clash aggregate checks would miss", async () => {
+  // Only one teacher is qualified for a subject taught by two groups in the
+  // same band. The current (unlocked) deployment already has that teacher
+  // covering both, which bandClash forbids - the fast pre-checks see enough
+  // spare capacity and miss it, so this needs the elastic re-solve.
+  const data = {
+    roles: [role1],
+    subjects: [chemSubject],
+    bands: [{ id: "bandA", name: "Band A", classIds: [], subjects: [] }],
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 20,
+        qualifications: ["chem"],
+      },
+    ],
+    groups: [
+      {
+        id: "g1",
+        level: 3,
+        block: "Chem",
+        label: "Group A",
+        periods: 4,
+        band: "bandA",
+        bandId: "bandA",
+        teachersNeeded: 1,
+        subjectId: "chem",
+      },
+      {
+        id: "g2",
+        level: 3,
+        block: "Chem",
+        label: "Group B",
+        periods: 4,
+        band: "bandA",
+        bandId: "bandA",
+        teachersNeeded: 1,
+        subjectId: "chem",
+      },
+    ],
+    assignments: [
+      { teacherId: "t1", groupId: "g1", locked: false },
+      { teacherId: "t1", groupId: "g2", locked: false },
+    ],
+  };
+  const model = buildModel(data);
+
+  const solved = await solveModel(model);
+  assert.notEqual(solved.status, "Optimal");
+
+  assert.deepEqual(
+    preCheck(data, model),
+    [],
+    "aggregate pre-checks should not catch this - it needs the elastic re-solve",
+  );
+
+  const diagnosis = await diagnoseInfeasibility(data, model);
+  assert.equal(diagnosis.method, "elastic");
+  assert.ok(
+    diagnosis.issues.some(
+      (msg) => msg.includes("Amy") && msg.includes("Band A"),
+    ),
+    `expected an issue naming Amy and Band A, got: ${JSON.stringify(diagnosis.issues)}`,
+  );
 });

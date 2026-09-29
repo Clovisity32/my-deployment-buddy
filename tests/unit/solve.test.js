@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildModel } from "../../src/model.js";
 import { solveModel } from "../../src/solve.js";
+import { effectiveCap } from "../../src/data.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const samplePath = path.join(__dirname, "../../sample/sample.json");
 
+// sample/sample.json is schema v2 (roles/subjects/classes/bands/qualifications)
+// - load it as-is so these solver regression tests exercise the real
+// vendored HiGHS build against the actual fictional school.
 function loadSample() {
   return JSON.parse(readFileSync(samplePath, "utf8"));
 }
@@ -19,9 +23,22 @@ function loadSample() {
 // minus operator and corrupted the whole model.
 function dashIdFixture() {
   return {
+    roles: [{ id: "role1", name: "Role 1", maxPeriods: null }],
     teachers: [
-      { id: "t-1", name: "Amy", maxPeriods: 8, subjects: ["Chem"] },
-      { id: "t-2", name: "Ben", maxPeriods: 8, subjects: ["Phy"] },
+      {
+        id: "t-1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["Chem"],
+      },
+      {
+        id: "t-2",
+        name: "Ben",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["Phy"],
+      },
     ],
     groups: [
       {
@@ -32,6 +49,7 @@ function dashIdFixture() {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "Chem",
       },
       {
         id: "g-401-402",
@@ -41,6 +59,7 @@ function dashIdFixture() {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "Phy",
       },
     ],
     assignments: [],
@@ -86,7 +105,7 @@ test("solveModel() covers every group, respects qualifications and load caps on 
     const t = teacherById.get(a.teacherId);
     const g = groupById.get(a.groupId);
     assert.ok(
-      t.subjects.includes(g.block),
+      Array.isArray(t.qualifications) && t.qualifications.includes(g.subjectId),
       `${t.name} is not qualified for ${g.label}`,
     );
   }
@@ -102,7 +121,7 @@ test("solveModel() covers every group, respects qualifications and load caps on 
   }
   for (const t of data.teachers) {
     assert.ok(
-      (loadByTeacher.get(t.id) || 0) <= t.maxPeriods,
+      (loadByTeacher.get(t.id) || 0) <= effectiveCap(data, t),
       `${t.name} is over their cap`,
     );
   }
@@ -124,15 +143,18 @@ test("solveModel() is deterministic: solving the same model twice gives the same
 
 test("solveModel() honours a locked assignment even when it is not the cheapest option", async () => {
   const data = loadSample();
-  // Lock the placeholder teacher onto a group a real teacher could cover -
-  // the solver must keep it even though it's penalised by placeholder.js.
-  data.assignments = [{ teacherId: "t9", groupId: "g-309-chem", locked: true }];
+  // Lock the placeholder teacher (t10) onto a group a real teacher (t2/t3,
+  // both qualified for G1_SCI) could cover instead - the solver must keep it
+  // even though it's penalised by placeholder.js.
+  data.assignments = [
+    { teacherId: "t10", groupId: "g_G1_SCI_301", locked: true },
+  ];
   const model = buildModel(data);
   const result = await solveModel(model);
   assert.equal(result.status, "Optimal");
   assert.ok(
     result.assignments.some(
-      (a) => a.teacherId === "t9" && a.groupId === "g-309-chem",
+      (a) => a.teacherId === "t10" && a.groupId === "g_G1_SCI_301",
     ),
     "expected the locked placeholder assignment to be honoured",
   );

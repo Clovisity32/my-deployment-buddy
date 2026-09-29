@@ -30,6 +30,7 @@ import { coverageLayer } from "./coverage.js";
 import { qualificationLayer } from "./qualification.js";
 import { loadCapLayer } from "./loadCap.js";
 import { pinLayer } from "./pin.js";
+import { bandClashLayer } from "./bandClash.js";
 import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
 
@@ -39,6 +40,7 @@ const LAYERS = [
   qualificationLayer,
   loadCapLayer,
   pinLayer,
+  bandClashLayer,
   stableLayer,
   placeholderLayer,
 ];

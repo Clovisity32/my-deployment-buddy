@@ -10,6 +10,7 @@
 //     constraints that couldn't be satisfied, which we can name in English.
 
 import { getHighs } from "./solve.js";
+import { effectiveCap } from "./data.js";
 
 /**
  * Fast, solver-free checks for the most common and clearest infeasibility
@@ -38,18 +39,60 @@ function preCheck(data, model) {
   }
   if (issues.length > 0) return issues; // Fix these first - they make later checks noisy.
 
-  // 2. Per-subject-block capacity: total periods the block's groups need vs.
-  //    total periods qualified teachers can give (ignoring caps from other
-  //    blocks, so this is a necessary-but-not-sufficient check - good enough
-  //    to point at the right subject).
-  const blocks = new Set(data.groups.map((g) => g.block));
-  for (const block of blocks) {
-    const demand = data.groups
-      .filter((g) => g.block === block)
-      .reduce((sum, g) => sum + g.periods * g.teachersNeeded, 0);
+  // 2. Per-subject capacity: total periods a subject's groups need vs. total
+  //    periods qualified teachers can give (ignoring caps used by other
+  //    subjects, so this is a necessary-but-not-sufficient check - good
+  //    enough to point at the right subject). A group with no matching
+  //    subjects[] record (a legacy/custom group without a subjectId) falls
+  //    back to being grouped by its raw `block` string instead, so it isn't
+  //    silently skipped from this check.
+  const subjects = Array.isArray(data.subjects) ? data.subjects : [];
+  const subjectById = new Map(subjects.map((s) => [s.id, s]));
+
+  const groupsBySubjectId = new Map(); // subjectId -> groups[]
+  const groupsByLegacyBlock = new Map(); // block -> groups[] (no matching subject record)
+  for (const g of data.groups) {
+    if (g.subjectId && subjectById.has(g.subjectId)) {
+      if (!groupsBySubjectId.has(g.subjectId))
+        groupsBySubjectId.set(g.subjectId, []);
+      groupsBySubjectId.get(g.subjectId).push(g);
+    } else {
+      if (!groupsByLegacyBlock.has(g.block))
+        groupsByLegacyBlock.set(g.block, []);
+      groupsByLegacyBlock.get(g.block).push(g);
+    }
+  }
+
+  for (const [subjectId, groupsForSubject] of groupsBySubjectId) {
+    const subjectName = subjectById.get(subjectId).name;
+    const demand = groupsForSubject.reduce(
+      (sum, g) => sum + g.periods * g.teachersNeeded,
+      0,
+    );
     const capacity = data.teachers
-      .filter((t) => Array.isArray(t.subjects) && t.subjects.includes(block))
-      .reduce((sum, t) => sum + t.maxPeriods, 0);
+      .filter(
+        (t) =>
+          Array.isArray(t.qualifications) &&
+          t.qualifications.includes(subjectId),
+      )
+      .reduce((sum, t) => sum + effectiveCap(data, t), 0);
+    if (demand > capacity) {
+      issues.push(
+        `${subjectName} needs ${demand} periods in total, but teachers qualified for ${subjectName} can give at most ${capacity}. Short by ${demand - capacity} period(s).`,
+      );
+    }
+  }
+  for (const [block, groupsForBlock] of groupsByLegacyBlock) {
+    const demand = groupsForBlock.reduce(
+      (sum, g) => sum + g.periods * g.teachersNeeded,
+      0,
+    );
+    // These groups have no subjectId, so the qualification layer never
+    // matches a teacher to them - capacity is necessarily 0. In practice
+    // check #1 (a coverage constraint with zero terms) already catches this
+    // before check #2 runs; this branch exists so the message is still
+    // informative if that ever changes.
+    const capacity = 0;
     if (demand > capacity) {
       issues.push(
         `${block} needs ${demand} periods in total, but teachers qualified for ${block} can give at most ${capacity}. Short by ${demand - capacity} period(s).`,
@@ -59,13 +102,16 @@ function preCheck(data, model) {
   if (issues.length > 0) return issues;
 
   // 3. Overall: total demand across every group vs. total capacity across
-  //    every teacher (catches an across-the-board overload the per-block
+  //    every teacher (catches an across-the-board overload the per-subject
   //    check can miss if periods are unevenly distributed).
   const totalDemand = data.groups.reduce(
     (sum, g) => sum + g.periods * g.teachersNeeded,
     0,
   );
-  const totalCapacity = data.teachers.reduce((sum, t) => sum + t.maxPeriods, 0);
+  const totalCapacity = data.teachers.reduce(
+    (sum, t) => sum + effectiveCap(data, t),
+    0,
+  );
   if (totalDemand > totalCapacity) {
     issues.push(
       `Overall, groups need ${totalDemand} periods but all teachers together can give ${totalCapacity}. Short by ${totalDemand - totalCapacity} period(s).`,
@@ -75,7 +121,7 @@ function preCheck(data, model) {
   return issues;
 }
 
-const HARD_PREFIXES = ["coverage_", "loadCap_", "pin_"];
+const HARD_PREFIXES = ["coverage_", "loadCap_", "pin_", "bandClash_"];
 
 function isHardConstraint(name) {
   return HARD_PREFIXES.some((p) => name.startsWith(p));
@@ -203,7 +249,7 @@ function explainConstraint(constraintName, data, slackValue) {
     const teacherId = constraintName.slice("loadCap_".length);
     const t = teacherById.get(teacherId);
     return t
-      ? `"${t.name}" would need ${rounded} period(s) more than their cap of ${t.maxPeriods} to satisfy the other requirements (often caused by a locked assignment).`
+      ? `"${t.name}" would need ${rounded} period(s) more than their cap of ${effectiveCap(data, t)} to satisfy the other requirements (often caused by a locked assignment).`
       : `Teacher "${teacherId}"'s load cap could not be respected.`;
   }
   if (constraintName.startsWith("pin_")) {
@@ -225,6 +271,28 @@ function explainConstraint(constraintName, data, slackValue) {
     return match
       ? `Locking "${match.t.name}" to "${match.g.label}" conflicts with another hard requirement (such as their load cap or another lock).`
       : `A locked assignment (${rest}) conflicts with another hard requirement, such as a load cap or another lock.`;
+  }
+  if (constraintName.startsWith("bandClash_")) {
+    // Name is "bandClash_<bandId>_<teacherId>". Ids may themselves contain
+    // underscores, so find the split point by matching a known band id
+    // prefix rather than guessing from the separator (same technique as
+    // pin_ above).
+    const rest = constraintName.slice("bandClash_".length);
+    const bands = Array.isArray(data.bands) ? data.bands : [];
+    let match = null;
+    for (const band of bands) {
+      const prefix = `${band.id}_`;
+      if (rest.startsWith(prefix)) {
+        const t = teacherById.get(rest.slice(prefix.length));
+        if (t) {
+          match = { band, t };
+          break;
+        }
+      }
+    }
+    return match
+      ? `${match.t.name} would need to be in two places at once for band "${match.band.name}" - only one group per teacher is allowed within a band.`
+      : `A teacher would need to be in two places at once within a band (${rest}) - only one group per teacher is allowed within a band.`;
   }
   return `Requirement "${constraintName}" could not be satisfied.`;
 }

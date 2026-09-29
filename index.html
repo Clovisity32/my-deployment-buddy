@@ -18,6 +18,10 @@
         --danger: #b91c1c;
         --placeholder: #fdf0d5;
         --locked: #e0e7ff;
+        --stream-g1: #dbe9fb;
+        --stream-g2: #fbe6cf;
+        --stream-g3: #d9f2e3;
+        --stream-pure: #f0dced;
       }
       * {
         box-sizing: border-box;
@@ -75,6 +79,11 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      button.active {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
       nav.tabs {
         display: flex;
         gap: 4px;
@@ -93,6 +102,8 @@
       }
       nav.tabs button.active {
         border-bottom-color: var(--accent);
+        background: transparent;
+        color: inherit;
         font-weight: 600;
       }
       main {
@@ -105,6 +116,13 @@
       }
       .panel.active {
         display: block;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 24px 0 8px;
+      }
+      h2:first-child {
+        margin-top: 0;
       }
       table {
         border-collapse: collapse;
@@ -149,6 +167,9 @@
         margin: 10px 0;
         align-items: center;
         flex-wrap: wrap;
+      }
+      .muted {
+        color: var(--muted);
       }
       .status {
         padding: 10px 14px;
@@ -218,6 +239,119 @@
       .layer-card .weight-field input {
         width: 70px;
       }
+
+      /* Subjects tab */
+      .level-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+      }
+      .level-checks label {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+      }
+
+      /* Classes tab */
+      .classes-toolbar {
+        justify-content: space-between;
+      }
+      .class-counts {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .class-counts label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .classes-level {
+        margin-bottom: 20px;
+      }
+      .classes-level h3 {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+
+      /* Bands tab */
+      .bands-level {
+        margin-bottom: 24px;
+      }
+      .band-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .band-classes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin: 10px 0;
+      }
+      .band-classes label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      }
+      table.band-subjects {
+        margin-bottom: 8px;
+      }
+      .bands-unassigned {
+        border: 1px dashed var(--warn);
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 20px;
+      }
+
+      /* Teachers tab: qualification grid */
+      table.qual-grid th,
+      table.qual-grid td {
+        font-size: 13px;
+        text-align: center;
+      }
+      table.qual-grid td:first-child,
+      table.qual-grid th:first-child {
+        text-align: left;
+      }
+
+      /* Groups tab */
+      .groups-level {
+        margin-bottom: 20px;
+      }
+      .groups-level h3 {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+
+      /* Deployment view */
+      .summary-strip {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+      }
+      .summary-stat {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 16px;
+        min-width: 120px;
+        text-align: center;
+      }
+      .summary-stat strong {
+        font-size: 18px;
+      }
+      .view-toggle {
+        display: flex;
+        gap: 4px;
+      }
       .deployment-level h2 {
         font-size: 15px;
         margin: 20px 0 8px;
@@ -249,11 +383,29 @@
       .row-locked td.lock-cell {
         background: var(--locked);
       }
+      .stream-g1 {
+        background: var(--stream-g1);
+      }
+      .stream-g2 {
+        background: var(--stream-g2);
+      }
+      .stream-g3 {
+        background: var(--stream-g3);
+      }
+      .stream-pure {
+        background: var(--stream-pure);
+      }
       .lock-toggle {
         cursor: pointer;
       }
-      .load-panel {
-        margin-top: 16px;
+      .seat {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .print-name {
+        display: none;
       }
       .load-bar-track {
         background: #e4e7ec;
@@ -280,6 +432,26 @@
         padding: 20px;
         font-size: 12px;
       }
+
+      @media print {
+        header .file-actions,
+        nav.tabs,
+        footer,
+        #panel-deployment .toolbar,
+        .seat select,
+        .seat .lock-toggle {
+          display: none !important;
+        }
+        .seat .print-name {
+          display: inline;
+        }
+        .panel {
+          display: none !important;
+        }
+        .panel.active {
+          display: block !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -299,26 +471,31 @@
     </header>
 
     <nav class="tabs">
-      <button data-tab="teachers" class="active">Teachers</button>
-      <button data-tab="groups">Groups</button>
-      <button data-tab="layers">Layers</button>
-      <button data-tab="deployment">Deployment View</button>
-      <button data-tab="versions">Versions</button>
+      <button data-tab="subjects" class="active">&#9312; Subjects</button>
+      <button data-tab="classes">&#9313; Classes</button>
+      <button data-tab="bands">&#9314; Bands</button>
+      <button data-tab="teachers">&#9315; Teachers</button>
+      <button data-tab="groups">&#9316; Groups</button>
+      <button data-tab="layers">&#9317; Solve</button>
+      <button data-tab="deployment">&#9318; Deployment View</button>
+      <button data-tab="versions">&#9319; Versions</button>
     </nav>
 
     <main>
-      <section id="panel-teachers" class="panel active">
+      <section id="panel-subjects" class="panel active">
         <div class="toolbar">
-          <button id="btn-add-teacher">+ Add teacher</button>
+          <button id="btn-add-subject">+ Add subject</button>
         </div>
+        <div id="subjects-status"></div>
         <div class="table-wrap">
-          <table id="table-teachers">
+          <table id="table-subjects">
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Max periods</th>
-                <th>Subjects (comma-separated)</th>
-                <th>Placeholder?</th>
+                <th>Discipline</th>
+                <th>Stream</th>
+                <th>Periods (2-week)</th>
+                <th>Levels offered</th>
                 <th></th>
               </tr>
             </thead>
@@ -327,12 +504,132 @@
         </div>
       </section>
 
-      <section id="panel-groups" class="panel">
+      <section id="panel-classes" class="panel">
+        <div class="toolbar classes-toolbar">
+          <div class="class-counts">
+            <label
+              >Level 1
+              <input
+                type="number"
+                min="0"
+                id="class-count-1"
+                style="width: 4em"
+            /></label>
+            <label
+              >Level 2
+              <input
+                type="number"
+                min="0"
+                id="class-count-2"
+                style="width: 4em"
+            /></label>
+            <label
+              >Level 3
+              <input
+                type="number"
+                min="0"
+                id="class-count-3"
+                style="width: 4em"
+            /></label>
+            <label
+              >Level 4
+              <input
+                type="number"
+                min="0"
+                id="class-count-4"
+                style="width: 4em"
+            /></label>
+            <label
+              >Level 5
+              <input
+                type="number"
+                min="0"
+                id="class-count-5"
+                style="width: 4em"
+            /></label>
+          </div>
+          <button id="btn-generate-classes">Generate classes</button>
+        </div>
+        <div id="classes-status"></div>
         <div class="toolbar">
-          <button id="btn-add-group">+ Add group</button>
+          <label style="flex: 1">
+            Class-name cycle (one per line)
+            <textarea
+              id="class-names"
+              rows="3"
+              style="
+                width: 100%;
+                display: block;
+                margin-top: 4px;
+                padding: 6px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font: inherit;
+              "
+            ></textarea>
+          </label>
+        </div>
+        <div id="classes-grids"></div>
+      </section>
+
+      <section id="panel-bands" class="panel">
+        <div id="bands-warnings"></div>
+        <div id="bands-status"></div>
+        <div id="bands-container"></div>
+      </section>
+
+      <section id="panel-teachers" class="panel">
+        <h2>Roles</h2>
+        <div class="table-wrap">
+          <table id="table-roles">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Max periods (2-week)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h2>Teachers</h2>
+        <div class="toolbar">
+          <button id="btn-add-teacher">+ Add teacher</button>
         </div>
         <div class="table-wrap">
-          <table id="table-groups">
+          <table id="table-teachers">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Cap (2-week periods)</th>
+                <th>Placeholder?</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h2>Qualifications</h2>
+        <div id="qualifications-grid"></div>
+      </section>
+
+      <section id="panel-groups" class="panel">
+        <div class="toolbar">
+          <button id="btn-regenerate-groups">Regenerate groups</button>
+        </div>
+        <div id="groups-status"></div>
+
+        <h2>Generated groups</h2>
+        <div id="generated-groups"></div>
+
+        <h2>Custom groups</h2>
+        <div class="toolbar">
+          <button id="btn-add-custom-group">+ Add custom group</button>
+        </div>
+        <div class="table-wrap">
+          <table id="table-custom-groups">
             <thead>
               <tr>
                 <th>Level</th>
@@ -340,8 +637,7 @@
                 <th>Label</th>
                 <th>Periods</th>
                 <th>Teachers needed</th>
-                <th>Band</th>
-                <th>Category</th>
+                <th>Subject</th>
                 <th>Note</th>
                 <th></th>
               </tr>
@@ -360,11 +656,17 @@
       </section>
 
       <section id="panel-deployment" class="panel">
-        <div id="deployment-view"></div>
-        <div class="load-panel">
-          <h2>Teacher load</h2>
-          <div id="load-panel"></div>
+        <div id="deployment-summary"></div>
+        <div class="toolbar">
+          <div class="view-toggle">
+            <button data-action="view-sheet" class="active">
+              Sheet layout
+            </button>
+            <button data-action="view-teacher">By teacher</button>
+          </div>
+          <button id="btn-print" title="Print this deployment">Print</button>
         </div>
+        <div id="deployment-body"></div>
       </section>
 
       <section id="panel-versions" class="panel">
