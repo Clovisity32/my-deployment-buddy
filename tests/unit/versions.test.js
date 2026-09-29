@@ -1,5 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import {
+  initializeTestEnvironment,
+  assertSucceeds,
+} from "@firebase/rules-unit-testing";
+import { addDoc, collection, getDocs, doc, getDoc } from "firebase/firestore";
 import {
   saveVersion,
   listVersions,
@@ -7,87 +13,76 @@ import {
   compareAssignments,
 } from "../../src/versions.js";
 
-function baseData() {
-  return {
-    teachers: [{ id: "t1", name: "Amy", maxPeriods: 20, subjects: ["Chem"] }],
-    groups: [
-      {
-        id: "g1",
-        level: 3,
-        block: "Chem",
-        label: "G1",
-        periods: 4,
-        band: null,
-        teachersNeeded: 1,
-      },
-    ],
-    assignments: [{ teacherId: "t1", groupId: "g1", locked: false }],
-    layerSettings: [{ id: "coverage", enabled: true, weight: 1 }],
-    versions: [],
-  };
-}
+const ALLOWED_EMAILS = ["hod@example.com", "cohod@example.com"];
 
-test("saveVersion() appends a snapshot without mutating the input", () => {
-  const data = baseData();
-  const originalVersions = data.versions;
-  const result = saveVersion(data, "v1", "2026-01-01T00:00:00.000Z");
+let testEnv;
+let db;
 
-  assert.equal(
-    data.versions,
-    originalVersions,
-    "input data must not be mutated",
+test.before(async () => {
+  testEnv = await initializeTestEnvironment({
+    projectId: "demo-my-deployment-buddy",
+    firestore: {
+      rules: readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1",
+      port: 8081,
+    },
+  });
+  const ctx = testEnv.authenticatedContext("test-uid", {
+    email: ALLOWED_EMAILS[0],
+  });
+  db = ctx.firestore();
+});
+
+test.after(async () => {
+  await testEnv.cleanup();
+});
+
+test("saveVersion() then listVersions() returns it with the right changedCount", async () => {
+  const assignments = [{ groupId: "g1", teacherId: "t1", locked: false }];
+  const id = await saveVersion(
+    db,
+    "v1",
+    assignments,
+    [],
+    "2026-01-01T00:00:00Z",
   );
-  assert.equal(data.versions.length, 0);
-  assert.equal(result.versions.length, 1);
-  assert.equal(result.versions[0].name, "v1");
-  assert.equal(result.versions[0].timestamp, "2026-01-01T00:00:00.000Z");
-  assert.deepEqual(result.versions[0].assignments, data.assignments);
+  const versions = await listVersions(db, []); // current has no assignments -> 1 group differs
+  const found = versions.find((v) => v.id === id);
+  assert.ok(found);
+  assert.equal(found.name, "v1");
+  assert.equal(found.changedCount, 1);
 });
 
-test("saveVersion() snapshot is a deep copy - later mutation of data does not affect it", () => {
-  const data = baseData();
-  const withVersion = saveVersion(data, "v1", "2026-01-01T00:00:00.000Z");
-  data.assignments[0].teacherId = "CHANGED";
-  assert.equal(withVersion.versions[0].assignments[0].teacherId, "t1");
+test("listVersions() sorts newest first", async () => {
+  await saveVersion(db, "older", [], [], "2020-01-01T00:00:00Z");
+  await saveVersion(db, "newer", [], [], "2030-01-01T00:00:00Z");
+  const versions = await listVersions(db, []);
+  const idxOlder = versions.findIndex((v) => v.name === "older");
+  const idxNewer = versions.findIndex((v) => v.name === "newer");
+  assert.ok(idxNewer < idxOlder);
 });
 
-test("listVersions() returns newest first and omits the assignment payload", () => {
-  let data = baseData();
-  data = saveVersion(data, "first", "2026-01-01T00:00:00.000Z");
-  data = saveVersion(data, "second", "2026-02-01T00:00:00.000Z");
-  const list = listVersions(data);
-  assert.deepEqual(
-    list.map((v) => v.name),
-    ["second", "first"],
+test("restoreVersion() applies the version's assignments/layerSettings onto data, leaving everything else untouched", async () => {
+  const id = await saveVersion(
+    db,
+    "to-restore",
+    [{ groupId: "g2", teacherId: "t2", locked: true }],
+    [{ id: "coverage", enabled: true, weight: 1 }],
   );
-  assert.equal(list[0].assignments, undefined);
-});
-
-test("restoreVersion() replaces assignments/layerSettings but keeps teachers/groups/versions", () => {
-  let data = baseData();
-  data = saveVersion(data, "v1", "2026-01-01T00:00:00.000Z");
-  // Simulate editing after the save.
-  const edited = {
-    ...data,
-    assignments: [{ teacherId: "t1", groupId: "g1", locked: true }],
-    layerSettings: [{ id: "coverage", enabled: false, weight: 1 }],
-  };
-
-  const restored = restoreVersion(edited, 0);
+  const data = { teachers: [{ id: "t2" }], assignments: [], layerSettings: [] };
+  const restored = await restoreVersion(db, data, id);
   assert.deepEqual(restored.assignments, [
-    { teacherId: "t1", groupId: "g1", locked: false },
+    { groupId: "g2", teacherId: "t2", locked: true },
   ]);
   assert.deepEqual(restored.layerSettings, [
     { id: "coverage", enabled: true, weight: 1 },
   ]);
-  assert.equal(restored.teachers, edited.teachers);
-  assert.equal(restored.groups, edited.groups);
-  assert.equal(restored.versions, edited.versions);
+  assert.deepEqual(restored.teachers, data.teachers); // untouched
 });
 
-test("restoreVersion() throws a clear error for an out-of-range index", () => {
-  const data = baseData();
-  assert.throws(() => restoreVersion(data, 5), /No version at index 5/);
+test("restoreVersion() throws for an unknown id", async () => {
+  const data = { assignments: [], layerSettings: [] };
+  await assert.rejects(() => restoreVersion(db, data, "does-not-exist"));
 });
 
 test("compareAssignments() finds no changes when nothing changed", () => {
