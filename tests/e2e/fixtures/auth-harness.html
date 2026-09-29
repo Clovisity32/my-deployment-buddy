@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <button id="trigger-sign-in">Sign in</button>
+    <span id="current-email"></span>
+    <script type="module">
+      import { onAuthChange, signInWithGoogle } from "../../../src/auth.js";
+
+      onAuthChange((user) => {
+        document.getElementById("current-email").textContent = user
+          ? user.email
+          : "";
+      });
+      document
+        .getElementById("trigger-sign-in")
+        .addEventListener("click", () => signInWithGoogle());
+    </script>
+  </body>
+</html>
