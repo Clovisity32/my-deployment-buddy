@@ -8,10 +8,32 @@ test("setData writes to Firestore and a second page load sees it", async ({
   await signInAsHod(page);
   await page.click('[data-tab="subjects"]');
   await page.click("#btn-add-subject");
+  // Isolate the add-subject write from the name-fill write below: wait for
+  // it to settle first, so the next "Saved" we observe can't be a stale
+  // leftover from THIS write instead of the one that actually carries
+  // "Test Subject".
+  await expect(page.locator("#save-status")).toHaveText("Saved", {
+    timeout: 10000,
+  });
+
   await page.fill(
     '#table-subjects tbody tr:last-child input[data-field="name"]',
     "Test Subject",
   );
+  // setData() writes to Firestore in the background (fire-and-forget) and
+  // initStore() is a one-shot fetch, not a realtime listener - this app is
+  // "latest on open", not live-synced (see the design spec). A second
+  // client only sees this edit once it opens AFTER the write is confirmed
+  // durable. Status text alone can't distinguish "Saved" from this write
+  // vs. the add-subject write above (both render the same static string),
+  // so require the full Saving...->Saved transition, proving THIS write's
+  // cycle was observed, not a leftover from the previous one.
+  await expect(page.locator("#save-status")).toHaveText("Saving…", {
+    timeout: 10000,
+  });
+  await expect(page.locator("#save-status")).toHaveText("Saved", {
+    timeout: 10000,
+  });
 
   const page2 = await context.newPage();
   await page2.goto("/index.html?emulators=1");
