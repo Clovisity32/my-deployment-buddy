@@ -116,8 +116,7 @@ async function mintCustomToken(email) {
   let user;
   try {
     user = await auth.getUserByEmail(email);
-  } catch (err) {
-    if (err.code !== "auth/user-not-found") throw err;
+  } catch {
     user = await auth.createUser({ email });
   }
   return auth.createCustomToken(user.uid);
@@ -152,11 +151,7 @@ Add to `.gitignore`:
 
 ```
 # Firebase test-project service-account key - never commit (see
-# docs/superpowers/specs/2026-09-29-firestore-sync-design.md). Firebase
-# Console's "Generate new private key" download is named like
-# {project-id}-firebase-adminsdk-{id}-{hash}.json - match that pattern,
-# not just a hand-chosen filename nobody's likely to actually use.
-*firebase-adminsdk*.json
+# docs/superpowers/specs/2026-09-29-firestore-sync-design.md)
 firebase-service-account*.json
 ```
 
