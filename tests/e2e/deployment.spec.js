@@ -270,6 +270,29 @@ test.describe("My Deployment Buddy", () => {
     );
   });
 
+  test("typing a band name keystroke-by-keystroke doesn't lose focus after each character", async ({
+    page,
+  }) => {
+    await loadSample(page);
+
+    await page.click('nav.tabs button[data-tab="bands"]');
+    const nameInput = page.locator(
+      '.band-card[data-id="b-403-405"] input[data-field="name"]',
+    );
+    await nameInput.click();
+    await nameInput.fill("");
+    // pressSequentially dispatches one real keystroke (and one "input"
+    // event) at a time - unlike fill(), which sets the whole value in one
+    // event - so it reproduces the reported bug: setData() on every
+    // keystroke re-renders the Bands tab's innerHTML, destroying and
+    // recreating this very input, which drops focus after the first
+    // character unless it's explicitly restored.
+    await nameInput.pressSequentially("Test Band", { delay: 20 });
+
+    await expect(nameInput).toHaveValue("Test Band");
+    await expect(nameInput).toBeFocused();
+  });
+
   test("locking an assignment keeps it fixed across a re-solve", async ({
     page,
   }) => {

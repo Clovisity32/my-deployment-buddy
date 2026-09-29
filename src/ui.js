@@ -17,7 +17,7 @@ import {
 import { exportWorkbook, importWorkbook } from "./excel.js";
 import { getLayers } from "./layers/registry.js";
 
-import { esc, genId } from "./ui/dom.js";
+import { esc, genId, withFocusPreserved } from "./ui/dom.js";
 import {
   initStore,
   getData,
@@ -390,7 +390,9 @@ async function onSignedIn(user) {
     wireDeployment();
     wireVersions();
     wireFileActions();
-    onChange(renderAll);
+    onChange(() =>
+      withFocusPreserved(document.getElementById("app-shell"), renderAll),
+    );
   }
   renderAll();
 }

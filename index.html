@@ -198,6 +198,14 @@
         justify-content: center;
         min-height: 100vh;
       }
+      /* #sign-in-screen's own ID selector otherwise outranks the browser's
+         default [hidden] { display: none } rule (ID beats attribute
+         selector regardless of source order), so setting the hidden
+         property/attribute in JS had no visual effect - the screen stayed
+         on top of #app-shell after sign-in. */
+      #sign-in-screen[hidden] {
+        display: none;
+      }
       .sign-in-card {
         background: var(--panel);
         border: 1px solid var(--border);
