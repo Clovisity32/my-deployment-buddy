@@ -6,7 +6,7 @@
 
 **Architecture:** Firestore stores the deployment as one document (`deployments/main`, everything except `versions`) plus a `versions` subcollection (one doc per saved snapshot, so the main document never grows unbounded). `src/ui/store.js` keeps its exact current `getData()`/`setData()`/`onChange()` public API — every tab UI module (`subjects.js`, `classes.js`, `bands.js`, `teachers.js`, `groups.js`, `deployment.js`) needs zero changes — only the store's internals swap from `localStorage` to Firestore, with an optimistic local cache (instant UI updates) backed by an async write with a transaction-based overwrite guard. Google Sign-In (Firebase Auth) gates the app; Firestore security rules restrict access to a two-email allowlist.
 
-**Tech Stack:** Firebase JS SDK v10 (modular, loaded via `https://www.gstatic.com/firebasejs/` ESM CDN URLs directly in `import` statements - no bundler, matching this project's no-build-step constraint), Firebase Local Emulator Suite (Firestore + Auth) for testing, `@firebase/rules-unit-testing` for security-rules tests, `firebase-tools` as a devDependency (test/dev tooling only, does not affect the shipped static site).
+**Tech Stack:** Firebase JS SDK v10 (modular; browser code imports it via bare specifiers - `"firebase/app"`, `"firebase/auth"`, `"firebase/firestore"` - resolved by a native browser import map pointing at the `gstatic.com` ESM CDN, so the same source files also resolve those specifiers through `node_modules/firebase` under plain `node --test`, with no bundler and no experimental Node flags), Firebase Local Emulator Suite (Firestore + Auth) for testing, `@firebase/rules-unit-testing` for security-rules tests, `firebase-tools` as a devDependency (test/dev tooling only, does not affect the shipped static site).
 
 **Spec:** `docs/superpowers/specs/2026-09-29-firestore-sync-design.md`
 
@@ -70,7 +70,7 @@ npm install --save-dev firebase firebase-tools @firebase/rules-unit-testing
 npm view firebase version
 ```
 
-Note the printed version (e.g. `10.14.1`) - Tasks 3, 4, and 5 hardcode this exact version in their `gstatic.com` CDN import URLs. If it differs from `10.14.1` used below, use the actual installed version consistently in every CDN URL in this plan.
+Note the printed version (e.g. `10.14.1`) - Task 6's `index.html` import map (and every standalone test fixture's copy of it, per Task 3) pins this exact version in its `gstatic.com` CDN URLs; it is the ONLY place a version string appears (source files import bare `"firebase/*"` specifiers, never a versioned URL directly - see Task 3's note on why). If it differs from `10.14.1` used below, use the actual installed version consistently in every import map in this plan.
 
 - [ ] **Step 2: Create `firebase.json`**
 
@@ -313,7 +313,7 @@ export { firebaseConfig, useEmulators };
 - [ ] **Step 2: Create `src/auth.js`**
 
 ```js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -321,7 +321,7 @@ import {
   signOut,
   onAuthStateChanged,
   connectAuthEmulator,
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+} from "firebase/auth";
 import { firebaseConfig, useEmulators } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
@@ -361,6 +361,8 @@ async function signOutUser() {
 export { app, onAuthChange, getCurrentUser, signInWithGoogle, signOutUser };
 ```
 
+`auth.js` imports `"firebase/app"`/`"firebase/auth"` as bare specifiers, not full `gstatic.com` URLs. This is deliberate: `src/versions.js` (Task 5) is loaded both by the browser AND directly by `node --test` (it has a plain Node unit test), and Node's default ES module loader cannot resolve a bare `https://` URL import without an experimental flag this project doesn't want to depend on. Every Firebase-importing file in this plan (`auth.js`, `store.js`, `versions.js`) uses the same bare specifiers; the browser resolves them via an **import map** (Task 6 adds one to `index.html`; every standalone test fixture HTML file needs its own copy, since import maps are per-document) mapping to the pinned `gstatic.com` CDN version, while Node resolves the identical specifiers straight through `node_modules/firebase` (installed in Task 1). One version string, one place (the import map) - not copy-pasted across files.
+
 - [ ] **Step 3: Write a failing e2e test for sign-in**
 
 Create `tests/e2e/auth.spec.js`:
@@ -397,6 +399,17 @@ Create `tests/e2e/fixtures/auth-harness.html`:
 ```html
 <!doctype html>
 <html>
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+        }
+      }
+    </script>
+  </head>
   <body>
     <button id="trigger-sign-in">Sign in</button>
     <span id="current-email"></span>
@@ -415,6 +428,8 @@ Create `tests/e2e/fixtures/auth-harness.html`:
   </body>
 </html>
 ```
+
+(Every Firebase-importing bare specifier used anywhere in this plan is mapped here, even though this fixture only directly needs `firebase/auth`/`firebase/app` - `src/auth.js` itself only pulls in those two, so the `firebase/firestore` entry is harmless but unused in this particular fixture. Copy this exact import map into every other standalone test fixture HTML file this plan creates - Task 4's `store-harness.html` - so each resolves independently of `index.html`.)
 
 The Auth emulator intercepts `signInWithPopup` and, in headless/automated contexts, auto-resolves it against a deterministic test account rather than opening a real Google consent screen - Playwright drives the click, the emulator handles the rest with no external network call.
 
@@ -544,7 +559,7 @@ import {
   runTransaction,
   serverTimestamp,
   connectFirestoreEmulator,
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+} from "firebase/firestore";
 import { app, getCurrentUser } from "../auth.js";
 import { useEmulators } from "../firebase-config.js";
 
@@ -700,6 +715,17 @@ Create `tests/e2e/fixtures/store-harness.html`:
 ```html
 <!doctype html>
 <html>
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+        }
+      }
+    </script>
+  </head>
   <body>
     <button id="load">Load</button>
     <button id="save">Save</button>
@@ -883,13 +909,7 @@ Expected: FAIL - `versions.js` still exports the old pure-array-based signatures
 // compareAssignments() is unchanged from before this file's Firestore
 // rewrite: pure, synchronous, no storage dependency.
 
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  getDoc,
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
 
 function versionsCollection(db) {
   return collection(db, "deployments", "main", "versions");
@@ -1019,14 +1039,32 @@ git commit -m "feat: move saved versions into a Firestore subcollection"
 
 **Files:**
 
-- Modify: `index.html:457-471` (wrap the existing `<header>` in `#app-shell`, add `#sign-in-screen`) and `index.html:700` (no script-tag changes needed - Firebase loads via `import` URLs inside the JS files themselves, not `<script>` tags)
+- Modify: `index.html:1-7` (add an import map to `<head>`, before any module script), `index.html:457-471` (wrap the existing `<header>` in `#app-shell`, add `#sign-in-screen`), and `index.html:700` (close the new wrapper - no `<script>` tag changes beyond that, since `src/ui.js` and everything it imports resolve Firebase through the import map, not a `<script>` tag of their own)
 
 **Interfaces:**
 
-- Consumes: nothing code-level (pure markup/CSS); Task 7 wires the new element ids.
-- Produces (element ids Task 7 depends on): `#sign-in-screen`, `#sign-in-button`, `#app-shell`, `#save-status`, `#current-user-email`, `#sign-out-button`.
+- Consumes: the pinned Firebase version confirmed in Task 1 Step 1.
+- Produces (element ids Task 7 depends on): `#sign-in-screen`, `#sign-in-button`, `#app-shell`, `#save-status`, `#current-user-email`, `#sign-out-button`. Also produces the import map every Firebase-importing file (`src/auth.js`, `src/ui/store.js`, `src/versions.js`) relies on when loaded through `index.html` (their Node-side tests resolve the same bare specifiers through `node_modules/firebase` instead - no import map needed there).
 
-- [ ] **Step 1: Add the sign-in screen and wrap the app shell**
+- [ ] **Step 1: Add the import map**
+
+Add to `index.html`'s `<head>`, before the closing `</head>` tag (it must appear before any `<script type="module">` that uses it - there can be only one `<script type="importmap">` per document):
+
+```html
+<script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    }
+  }
+</script>
+```
+
+(Match the `10.14.1` to whatever `npm view firebase version` actually printed in Task 1 Step 1.)
+
+- [ ] **Step 2: Add the sign-in screen and wrap the app shell**
 
 Replace `index.html:457-471`:
 
@@ -1085,7 +1123,7 @@ new_string:
 </body>
 ```
 
-- [ ] **Step 2: Close the new `#app-shell` wrapper**
+- [ ] **Step 3: Close the new `#app-shell` wrapper**
 
 Find the existing closing `</body>` (currently `index.html:700`, may have shifted by Step 1's added lines - search for it). Replace:
 
@@ -1108,7 +1146,7 @@ new_string:
   </body>
 ```
 
-- [ ] **Step 3: Add CSS for the sign-in screen and save-status indicator**
+- [ ] **Step 4: Add CSS for the sign-in screen and save-status indicator**
 
 Add to the existing `<style>` block (near the other component styles, e.g. after the existing `.status` rules):
 
@@ -1149,30 +1187,31 @@ Add to the existing `<style>` block (near the other component styles, e.g. after
 }
 ```
 
-- [ ] **Step 4: Verify the page still loads with no console errors**
+- [ ] **Step 5: Verify the new markup itself renders correctly**
 
-Run: `npx http-server -p 8080 -c-1 &` then, using a quick headless check:
+By this point in the plan, `src/ui/store.js` (Task 4) has already dropped its old `isDirty`/`clearDirty` exports, but `src/ui.js` still imports them (Task 7 hasn't updated it yet) - so `<script type="module" src="src/ui.js">` is EXPECTED to fail to link with a `SyntaxError` mentioning `isDirty` is not exported by `./ui/store.js`. That failure is a known, intentional intermediate state between Tasks 4 and 7, not a defect in this task's markup - this step checks the markup itself renders correctly despite it, by disabling that one script tag temporarily rather than asserting a misleadingly-empty error list.
+
+Run: `npx http-server -p 8080 -c-1 &` then:
 
 ```bash
 node -e "
 import('playwright').then(async ({ chromium }) => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('http://localhost:8080/index.html');
-  await page.waitForSelector('#sign-in-screen');
+  await page.goto('data:text/html,' + encodeURIComponent(
+    require('fs').readFileSync('index.html', 'utf8')
+      .replace('<script type=\"module\" src=\"src/ui.js\"></script>', '')
+  ));
   console.log('sign-in visible:', await page.locator('#sign-in-screen').isVisible());
   console.log('app-shell hidden:', await page.locator('#app-shell').isHidden());
-  console.log('errors:', errors);
   await browser.close();
 });
 "
 ```
 
-Expected: `sign-in visible: true`, `app-shell hidden: true`, `errors: []` (module-not-found errors for `src/auth.js` imports inside `src/ui.js` are expected/ignorable here since Task 7 hasn't wired the auth gate yet - only the raw HTML/CSS is being checked in this step).
+Expected: `sign-in visible: true`, `app-shell hidden: true` - confirming the markup/CSS from Steps 1-4 is structurally correct, independent of `ui.js`'s currently-broken import (which Task 7 resolves).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add index.html
@@ -1189,7 +1228,7 @@ git commit -m "feat: add sign-in screen and save-status indicator markup"
 
 **Interfaces:**
 
-- Consumes: `onAuthChange`, `getCurrentUser`, `signInWithGoogle`, `signOutUser` (Task 3); `initStore`, `getData`, `setData`, `onChange`, `onSaveStatusChange`, `isBlocked`, `getFirestoreDb` (Task 4); `saveVersion`, `listVersions`, `restoreVersion`, `compareAssignments` (Task 5, new signatures); the element ids from Task 6.
+- Consumes: `onAuthChange`, `signInWithGoogle`, `signOutUser` (Task 3 - `getCurrentUser` is NOT imported here; `onAuthChange`'s callback already receives the user object directly, so `ui.js` never needs to call it separately); `initStore`, `getData`, `setData`, `onChange`, `onSaveStatusChange`, `getFirestoreDb` (Task 4 - `isBlocked` is NOT imported here either; the blocked state is already fully conveyed through `onSaveStatusChange`'s `'blocked'`/`'conflict'` status, which this task's `renderSaveStatus` already renders, so a separate `isBlocked()` check would be redundant); `saveVersion`, `listVersions`, `restoreVersion`, `compareAssignments` (Task 5, new signatures); the element ids from Task 6.
 - Produces: nothing new for later tasks (this is the top of the dependency chain within the app code).
 
 - [ ] **Step 1: Update imports and add the auth-gated boot sequence**
@@ -1246,7 +1285,6 @@ import {
   setData,
   onChange,
   onSaveStatusChange,
-  isBlocked,
   getFirestoreDb,
 } from "./ui/store.js";
 import { onAuthChange, signInWithGoogle, signOutUser } from "./auth.js";
