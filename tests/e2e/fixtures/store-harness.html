@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+  <head>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <button id="load">Load</button>
+    <button id="save">Save</button>
+    <button id="save-twice">Save Twice</button>
+    <button id="reload">Reload</button>
+    <pre id="data-out"></pre>
+    <span id="status-out"></span>
+    <script type="module">
+      import { signInWithGoogle } from "../../../src/auth.js";
+      import {
+        initStore,
+        getData,
+        setData,
+        onSaveStatusChange,
+      } from "../../../src/ui/store.js";
+
+      onSaveStatusChange(({ status, message }) => {
+        document.getElementById("status-out").textContent = message
+          ? `${status}: ${message}`
+          : status;
+      });
+
+      document.getElementById("load").addEventListener("click", async () => {
+        await signInWithGoogle();
+        await initStore();
+        document.getElementById("data-out").textContent =
+          JSON.stringify(getData());
+      });
+
+      document.getElementById("save").addEventListener("click", () => {
+        setData({
+          ...getData(),
+          roles: [{ id: "r1", name: "Test Role", maxPeriods: 10 }],
+        });
+      });
+
+      // Simulates two rapid keystrokes: each setData() call is based on the
+      // in-memory state left by the previous one, and neither is awaited
+      // before the next fires - exactly what every tab module's per-input-
+      // event setData() call does during real typing.
+      document
+        .getElementById("save-twice")
+        .addEventListener("click", async () => {
+          setData({
+            ...getData(),
+            roles: [{ id: "r1", name: "First", maxPeriods: 10 }],
+          });
+          await setData({
+            ...getData(),
+            roles: [{ id: "r1", name: "Second", maxPeriods: 10 }],
+          });
+          document.getElementById("data-out").textContent =
+            JSON.stringify(getData());
+        });
+
+      // Re-fetches from Firestore (bypassing the in-memory cache) to prove
+      // a write actually landed durably - what a page reload / a second
+      // client opening later would see.
+      document.getElementById("reload").addEventListener("click", async () => {
+        await initStore();
+        document.getElementById("data-out").textContent =
+          JSON.stringify(getData());
+      });
+    </script>
+  </body>
+</html>

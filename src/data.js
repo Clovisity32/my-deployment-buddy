@@ -1,5 +1,6 @@
-// Data model, validation, and localStorage persistence for the deployment solver.
-// Pure functions where possible so they're easy to unit test without a browser.
+// Data model and validation for the deployment solver. Persistence lives in
+// src/ui/store.js (Firestore-backed). Pure functions where possible so
+// they're easy to unit test without a browser.
 
 /** @typedef {{id:string, name:string, maxPeriods:number|null}} Role */
 /** @typedef {{id:string, name:string, discipline:string, stream:string, periods:number, levels:number[]}} Subject */
@@ -20,8 +21,6 @@
 /** @typedef {{groupId:string, teacherId:string, locked:boolean}} Assignment */
 /** @typedef {{id:string, enabled:boolean, weight:number}} LayerSetting */
 /** @typedef {{name:string, timestamp:string, assignments:Assignment[], layerSettings:LayerSetting[]}} Version */
-
-const STORAGE_KEY = "deploymentBuddy.v2";
 
 /** Canonical empty state. */
 function emptyData() {
@@ -474,69 +473,4 @@ function migrateV1(data) {
   };
 }
 
-/**
- * Load data from localStorage. Returns emptyData() on any failure
- * (missing key, corrupt JSON, invalid shape, or no localStorage available).
- * v1-shaped stored data (no `roles` array) is transparently migrated to v2
- * before validation.
- * @param {Storage} [storage]
- * @returns {ReturnType<typeof emptyData>}
- */
-function loadFromStorage(storage) {
-  try {
-    const store =
-      storage || (typeof localStorage !== "undefined" ? localStorage : null);
-    if (!store) return emptyData();
-    const raw = store.getItem(STORAGE_KEY);
-    if (!raw) return emptyData();
-    let parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed.roles)) {
-      parsed = migrateV1(parsed);
-    }
-    const errors = validate(parsed);
-    if (errors.length > 0) {
-      console.warn(
-        "Stored deployment data failed validation, starting fresh:",
-        errors,
-      );
-      return emptyData();
-    }
-    return parsed;
-  } catch (err) {
-    console.warn(
-      "Failed to load deployment data from storage, starting fresh:",
-      err,
-    );
-    return emptyData();
-  }
-}
-
-/**
- * Save data to localStorage. Returns true on success, false on failure
- * (quota exceeded, no localStorage, etc). Never throws.
- * @param {any} data
- * @param {Storage} [storage]
- * @returns {boolean}
- */
-function saveToStorage(data, storage) {
-  try {
-    const store =
-      storage || (typeof localStorage !== "undefined" ? localStorage : null);
-    if (!store) return false;
-    store.setItem(STORAGE_KEY, JSON.stringify(data));
-    return true;
-  } catch (err) {
-    console.warn("Failed to save deployment data to storage:", err);
-    return false;
-  }
-}
-
-export {
-  emptyData,
-  validate,
-  loadFromStorage,
-  saveToStorage,
-  migrateV1,
-  effectiveCap,
-  STORAGE_KEY,
-};
+export { emptyData, validate, migrateV1, effectiveCap };

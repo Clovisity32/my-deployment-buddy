@@ -192,6 +192,48 @@
         margin: 6px 0 0 18px;
         padding: 0;
       }
+      #sign-in-screen {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      /* #sign-in-screen's own ID selector otherwise outranks the browser's
+         default [hidden] { display: none } rule (ID beats attribute
+         selector regardless of source order), so setting the hidden
+         property/attribute in JS had no visual effect - the screen stayed
+         on top of #app-shell after sign-in. */
+      #sign-in-screen[hidden] {
+        display: none;
+      }
+      .sign-in-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 32px;
+        max-width: 360px;
+        text-align: center;
+      }
+      .sign-in-card h1 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+      .sign-in-card p {
+        color: var(--muted);
+        margin: 0 0 20px;
+      }
+      .save-status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .save-status.error {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
       .layer-card {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -453,246 +495,272 @@
         }
       }
     </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+        }
+      }
+    </script>
   </head>
   <body>
-    <header>
-      <h1>My Deployment Buddy</h1>
-      <div class="file-actions">
-        <button
-          id="btn-load-sample"
-          title="Load the built-in fictional sample school"
-        >
-          Load sample
-        </button>
-        <button id="btn-import">Open from Excel…</button>
-        <input type="file" id="file-input" accept=".xlsx" />
-        <button id="btn-export">Save to Excel</button>
+    <div id="sign-in-screen">
+      <div class="sign-in-card">
+        <h1>My Deployment Buddy</h1>
+        <p>
+          Sign in with your Google account to view and edit the shared
+          deployment.
+        </p>
+        <button id="sign-in-button" class="primary">Sign in with Google</button>
       </div>
-    </header>
+    </div>
 
-    <nav class="tabs">
-      <button data-tab="subjects" class="active">&#9312; Subjects</button>
-      <button data-tab="classes">&#9313; Classes</button>
-      <button data-tab="bands">&#9314; Bands</button>
-      <button data-tab="teachers">&#9315; Teachers</button>
-      <button data-tab="groups">&#9316; Groups</button>
-      <button data-tab="layers">&#9317; Solve</button>
-      <button data-tab="deployment">&#9318; Deployment View</button>
-      <button data-tab="versions">&#9319; Versions</button>
-    </nav>
-
-    <main>
-      <section id="panel-subjects" class="panel active">
-        <div class="toolbar">
-          <button id="btn-add-subject">+ Add subject</button>
+    <div id="app-shell" hidden>
+      <header>
+        <h1>My Deployment Buddy</h1>
+        <span id="save-status" class="save-status"></span>
+        <span id="current-user-email" class="muted"></span>
+        <button id="sign-out-button">Sign out</button>
+        <div class="file-actions">
+          <button
+            id="btn-load-sample"
+            title="Load the built-in fictional sample school"
+          >
+            Load sample
+          </button>
+          <button id="btn-import">Open from Excel…</button>
+          <input type="file" id="file-input" accept=".xlsx" />
+          <button id="btn-export">Save to Excel</button>
         </div>
-        <div id="subjects-status"></div>
-        <div class="table-wrap">
-          <table id="table-subjects">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Discipline</th>
-                <th>Stream</th>
-                <th>Periods (2-week)</th>
-                <th>Levels offered</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
+      </header>
 
-      <section id="panel-classes" class="panel">
-        <div class="toolbar classes-toolbar">
-          <div class="class-counts">
-            <label
-              >Level 1
-              <input
-                type="number"
-                min="0"
-                id="class-count-1"
-                style="width: 4em"
-            /></label>
-            <label
-              >Level 2
-              <input
-                type="number"
-                min="0"
-                id="class-count-2"
-                style="width: 4em"
-            /></label>
-            <label
-              >Level 3
-              <input
-                type="number"
-                min="0"
-                id="class-count-3"
-                style="width: 4em"
-            /></label>
-            <label
-              >Level 4
-              <input
-                type="number"
-                min="0"
-                id="class-count-4"
-                style="width: 4em"
-            /></label>
-            <label
-              >Level 5
-              <input
-                type="number"
-                min="0"
-                id="class-count-5"
-                style="width: 4em"
-            /></label>
+      <nav class="tabs">
+        <button data-tab="subjects" class="active">&#9312; Subjects</button>
+        <button data-tab="classes">&#9313; Classes</button>
+        <button data-tab="bands">&#9314; Bands</button>
+        <button data-tab="teachers">&#9315; Teachers</button>
+        <button data-tab="groups">&#9316; Groups</button>
+        <button data-tab="layers">&#9317; Solve</button>
+        <button data-tab="deployment">&#9318; Deployment View</button>
+        <button data-tab="versions">&#9319; Versions</button>
+      </nav>
+
+      <main>
+        <section id="panel-subjects" class="panel active">
+          <div class="toolbar">
+            <button id="btn-add-subject">+ Add subject</button>
           </div>
-          <button id="btn-generate-classes">Generate classes</button>
-        </div>
-        <div id="classes-status"></div>
-        <div class="toolbar">
-          <label style="flex: 1">
-            Class-name cycle (one per line)
-            <textarea
-              id="class-names"
-              rows="3"
+          <div id="subjects-status"></div>
+          <div class="table-wrap">
+            <table id="table-subjects">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Discipline</th>
+                  <th>Stream</th>
+                  <th>Periods (2-week)</th>
+                  <th>Levels offered</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="panel-classes" class="panel">
+          <div class="toolbar classes-toolbar">
+            <div class="class-counts">
+              <label
+                >Level 1
+                <input
+                  type="number"
+                  min="0"
+                  id="class-count-1"
+                  style="width: 4em"
+              /></label>
+              <label
+                >Level 2
+                <input
+                  type="number"
+                  min="0"
+                  id="class-count-2"
+                  style="width: 4em"
+              /></label>
+              <label
+                >Level 3
+                <input
+                  type="number"
+                  min="0"
+                  id="class-count-3"
+                  style="width: 4em"
+              /></label>
+              <label
+                >Level 4
+                <input
+                  type="number"
+                  min="0"
+                  id="class-count-4"
+                  style="width: 4em"
+              /></label>
+              <label
+                >Level 5
+                <input
+                  type="number"
+                  min="0"
+                  id="class-count-5"
+                  style="width: 4em"
+              /></label>
+            </div>
+            <button id="btn-generate-classes">Generate classes</button>
+          </div>
+          <div id="classes-status"></div>
+          <div class="toolbar">
+            <label style="flex: 1">
+              Class-name cycle (one per line)
+              <textarea
+                id="class-names"
+                rows="3"
+                style="
+                  width: 100%;
+                  display: block;
+                  margin-top: 4px;
+                  padding: 6px;
+                  border: 1px solid var(--border);
+                  border-radius: 6px;
+                  font: inherit;
+                "
+              ></textarea>
+            </label>
+          </div>
+          <div id="classes-grids"></div>
+        </section>
+
+        <section id="panel-bands" class="panel">
+          <div id="bands-warnings"></div>
+          <div id="bands-status"></div>
+          <div id="bands-container"></div>
+        </section>
+
+        <section id="panel-teachers" class="panel">
+          <h2>Roles</h2>
+          <div class="table-wrap">
+            <table id="table-roles">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Max periods (2-week)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h2>Teachers</h2>
+          <div class="toolbar">
+            <button id="btn-add-teacher">+ Add teacher</button>
+          </div>
+          <div class="table-wrap">
+            <table id="table-teachers">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Cap (2-week periods)</th>
+                  <th>Placeholder?</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h2>Qualifications</h2>
+          <div id="qualifications-grid"></div>
+        </section>
+
+        <section id="panel-groups" class="panel">
+          <div class="toolbar">
+            <button id="btn-regenerate-groups">Regenerate groups</button>
+          </div>
+          <div id="groups-status"></div>
+
+          <h2>Generated groups</h2>
+          <div id="generated-groups"></div>
+
+          <h2>Custom groups</h2>
+          <div class="toolbar">
+            <button id="btn-add-custom-group">+ Add custom group</button>
+          </div>
+          <div class="table-wrap">
+            <table id="table-custom-groups">
+              <thead>
+                <tr>
+                  <th>Level</th>
+                  <th>Block</th>
+                  <th>Label</th>
+                  <th>Periods</th>
+                  <th>Teachers needed</th>
+                  <th>Subject</th>
+                  <th>Note</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="panel-layers" class="panel">
+          <div class="toolbar">
+            <button id="btn-solve" class="primary">Solve</button>
+          </div>
+          <div id="solve-status"></div>
+          <div id="layers-list"></div>
+        </section>
+
+        <section id="panel-deployment" class="panel">
+          <div id="deployment-summary"></div>
+          <div class="toolbar">
+            <div class="view-toggle">
+              <button data-action="view-sheet" class="active">
+                Sheet layout
+              </button>
+              <button data-action="view-teacher">By teacher</button>
+            </div>
+            <button id="btn-print" title="Print this deployment">Print</button>
+          </div>
+          <div id="deployment-body"></div>
+        </section>
+
+        <section id="panel-versions" class="panel">
+          <div class="toolbar">
+            <input
+              type="text"
+              id="version-name"
+              placeholder="Version name, e.g. 'v3 - after Mr Tan's request'"
               style="
-                width: 100%;
-                display: block;
-                margin-top: 4px;
-                padding: 6px;
+                flex: 1;
+                min-width: 220px;
+                padding: 6px 10px;
                 border: 1px solid var(--border);
                 border-radius: 6px;
-                font: inherit;
               "
-            ></textarea>
-          </label>
-        </div>
-        <div id="classes-grids"></div>
-      </section>
-
-      <section id="panel-bands" class="panel">
-        <div id="bands-warnings"></div>
-        <div id="bands-status"></div>
-        <div id="bands-container"></div>
-      </section>
-
-      <section id="panel-teachers" class="panel">
-        <h2>Roles</h2>
-        <div class="table-wrap">
-          <table id="table-roles">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Max periods (2-week)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <h2>Teachers</h2>
-        <div class="toolbar">
-          <button id="btn-add-teacher">+ Add teacher</button>
-        </div>
-        <div class="table-wrap">
-          <table id="table-teachers">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Cap (2-week periods)</th>
-                <th>Placeholder?</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <h2>Qualifications</h2>
-        <div id="qualifications-grid"></div>
-      </section>
-
-      <section id="panel-groups" class="panel">
-        <div class="toolbar">
-          <button id="btn-regenerate-groups">Regenerate groups</button>
-        </div>
-        <div id="groups-status"></div>
-
-        <h2>Generated groups</h2>
-        <div id="generated-groups"></div>
-
-        <h2>Custom groups</h2>
-        <div class="toolbar">
-          <button id="btn-add-custom-group">+ Add custom group</button>
-        </div>
-        <div class="table-wrap">
-          <table id="table-custom-groups">
-            <thead>
-              <tr>
-                <th>Level</th>
-                <th>Block</th>
-                <th>Label</th>
-                <th>Periods</th>
-                <th>Teachers needed</th>
-                <th>Subject</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="panel-layers" class="panel">
-        <div class="toolbar">
-          <button id="btn-solve" class="primary">Solve</button>
-        </div>
-        <div id="solve-status"></div>
-        <div id="layers-list"></div>
-      </section>
-
-      <section id="panel-deployment" class="panel">
-        <div id="deployment-summary"></div>
-        <div class="toolbar">
-          <div class="view-toggle">
-            <button data-action="view-sheet" class="active">
-              Sheet layout
-            </button>
-            <button data-action="view-teacher">By teacher</button>
+            />
+            <button id="btn-save-version">Save version</button>
           </div>
-          <button id="btn-print" title="Print this deployment">Print</button>
-        </div>
-        <div id="deployment-body"></div>
-      </section>
+          <ul class="versions-list" id="versions-list"></ul>
+        </section>
+      </main>
 
-      <section id="panel-versions" class="panel">
-        <div class="toolbar">
-          <input
-            type="text"
-            id="version-name"
-            placeholder="Version name, e.g. 'v3 - after Mr Tan's request'"
-            style="
-              flex: 1;
-              min-width: 220px;
-              padding: 6px 10px;
-              border: 1px solid var(--border);
-              border-radius: 6px;
-            "
-          />
-          <button id="btn-save-version">Save version</button>
-        </div>
-        <ul class="versions-list" id="versions-list"></ul>
-      </section>
-    </main>
-
-    <footer>
-      Runs entirely in this browser - no data is sent anywhere. Save to Excel to
-      keep your work.
-    </footer>
+      <footer>
+        Runs entirely in this browser - no data is sent anywhere. Save to Excel
+        to keep your work.
+      </footer>
+    </div>
+    <!-- closes #app-shell -->
 
     <!-- Vendored libraries (classic scripts, not ES modules - see CLAUDE.md). -->
     <script src="src/vendor/xlsx/xlsx.full.min.js"></script>

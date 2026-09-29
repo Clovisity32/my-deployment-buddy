@@ -6,6 +6,11 @@ playwright-report/
 .DS_Store
 Thumbs.db
 
+# Firebase Local Emulator Suite debug logs
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
 # Real school data - never commit (contains actual teacher names / PDPA)
 Current Deployment Layout.png
 Current Deployment Layout.lnk

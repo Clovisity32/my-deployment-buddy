@@ -1,54 +1,78 @@
 // Deployment memory: named snapshots the HOD can save, list, restore, and
-// compare. Every function here is pure - it takes a data object and returns
-// a NEW data object, never mutating its input - so the UI layer can hold
-// onto the previous value for an "undo" without any extra bookkeeping.
+// compare. Versions live in Firestore's deployments/main/versions
+// subcollection (not embedded in the main document) so the main document
+// never grows unbounded - see
+// docs/superpowers/specs/2026-09-29-firestore-sync-design.md.
 //
-// Nothing here calls the solver. Restoring a version is just copying its
-// saved assignments back onto the current data - re-opening a deployment
-// must never trigger a fresh solve (see CLAUDE.md).
+// compareAssignments() is unchanged from before this file's Firestore
+// rewrite: pure, synchronous, no storage dependency.
 
-/**
- * @param {import('./data.js').default} data
- * @param {string} name
- * @param {string} [timestamp] ISO string; defaults to now. Passed explicitly in tests for determinism.
- * @returns {import('./data.js').default} a new data object with the snapshot appended
- */
-function saveVersion(data, name, timestamp = new Date().toISOString()) {
-  const snapshot = {
-    name,
-    timestamp,
-    assignments: deepCopy(data.assignments || []),
-    layerSettings: deepCopy(data.layerSettings || []),
-  };
-  return {
-    ...data,
-    versions: [...(data.versions || []), snapshot],
-  };
+import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
+
+function versionsCollection(db) {
+  return collection(db, "deployments", "main", "versions");
 }
 
 /**
- * @param {import('./data.js').default} data
- * @returns {{name:string, timestamp:string}[]} newest first, without the (possibly large) assignment payload
+ * @param {any} db Firestore instance (store.js's getFirestoreDb())
+ * @param {string} name
+ * @param {{groupId:string, teacherId:string, locked:boolean}[]} assignments
+ * @param {{id:string, enabled:boolean, weight:number}[]} layerSettings
+ * @param {string} [timestamp] ISO string; defaults to now. Passed explicitly in tests for determinism.
+ * @returns {Promise<string>} the new version's Firestore document id
  */
-function listVersions(data) {
-  return [...(data.versions || [])]
-    .map((v) => ({ name: v.name, timestamp: v.timestamp }))
+async function saveVersion(
+  db,
+  name,
+  assignments,
+  layerSettings,
+  timestamp = new Date().toISOString(),
+) {
+  const ref = await addDoc(versionsCollection(db), {
+    name,
+    timestamp,
+    assignments: deepCopy(assignments),
+    layerSettings: deepCopy(layerSettings),
+  });
+  return ref.id;
+}
+
+/**
+ * @param {any} db
+ * @param {{groupId:string, teacherId:string, locked:boolean}[]} currentAssignments
+ * @returns {Promise<{id:string, name:string, timestamp:string, changedCount:number}[]>} newest first
+ */
+async function listVersions(db, currentAssignments) {
+  const snap = await getDocs(versionsCollection(db));
+  return snap.docs
+    .map((d) => {
+      const v = d.data();
+      return {
+        id: d.id,
+        name: v.name,
+        timestamp: v.timestamp,
+        changedCount: compareAssignments(v.assignments, currentAssignments)
+          .length,
+      };
+    })
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
 /**
- * Restores a saved version's assignments and layer settings onto `data`.
- * Teachers, groups, and the version history itself are left untouched.
+ * @param {any} db
  * @param {import('./data.js').default} data
- * @param {number} versionIndex index into data.versions (its original save order, not the sorted listVersions() order)
- * @returns {import('./data.js').default} a new data object
- * @throws {Error} if versionIndex is out of range
+ * @param {string} versionId
+ * @returns {Promise<import('./data.js').default>} a new data object
+ * @throws {Error} if no version with that id exists
  */
-function restoreVersion(data, versionIndex) {
-  const version = (data.versions || [])[versionIndex];
-  if (!version) {
-    throw new Error(`No version at index ${versionIndex}`);
+async function restoreVersion(db, data, versionId) {
+  const snap = await getDoc(
+    doc(db, "deployments", "main", "versions", versionId),
+  );
+  if (!snap.exists()) {
+    throw new Error(`No version with id ${versionId}`);
   }
+  const version = snap.data();
   return {
     ...data,
     assignments: deepCopy(version.assignments),

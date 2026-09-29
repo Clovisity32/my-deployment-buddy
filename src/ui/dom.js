@@ -28,4 +28,52 @@ function genId(prefix) {
   return `${prefix}-${rand}`;
 }
 
-export { esc, genId };
+/**
+ * Every tab re-renders by replacing a container's innerHTML wholesale on
+ * every setData() (see store.js/registry - every tab fires setData() per
+ * keystroke, and onChange(renderAll) re-renders every tab on every call).
+ * innerHTML replacement destroys and recreates every descendant node,
+ * including whichever input the HOD is actively typing into - without this,
+ * the input loses focus after every single character, forcing a re-click
+ * to type the next one. Path-based re-find works because render functions
+ * identify repeated elements only via data-* attributes, and the DOM shape
+ * is identical before/after a same-data-shape re-render.
+ */
+function withFocusPreserved(container, renderFn) {
+  const active = document.activeElement;
+  let restore = null;
+
+  if (active && container.contains(active) && active !== container) {
+    const parts = [];
+    for (let el = active; el && el !== container; el = el.parentElement) {
+      const dataAttrs = [...el.attributes]
+        .filter((a) => a.name.startsWith("data-"))
+        .map((a) => `[${a.name}="${CSS.escape(a.value)}"]`)
+        .join("");
+      parts.unshift(el.tagName.toLowerCase() + dataAttrs);
+    }
+    const selector = parts.join(" > ");
+    const selectionStart =
+      typeof active.selectionStart === "number" ? active.selectionStart : null;
+    const selectionEnd =
+      typeof active.selectionEnd === "number" ? active.selectionEnd : null;
+
+    restore = () => {
+      const found = container.querySelector(selector);
+      if (!found) return;
+      found.focus();
+      if (selectionStart === null) return;
+      try {
+        found.setSelectionRange(selectionStart, selectionEnd);
+      } catch {
+        // Some input types (e.g. number) don't support setSelectionRange -
+        // focus alone is still a win over losing it entirely.
+      }
+    };
+  }
+
+  renderFn();
+  if (restore) restore();
+}
+
+export { esc, genId, withFocusPreserved };
