@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Access is restricted to exactly two Google account emails - the HOD and
+// one co-HOD. Expanding access means editing this list and re-pasting these
+// rules into the Firebase console (production has no auto-deploy for
+// rules); it never means changing app code. See
+// docs/superpowers/specs/2026-09-29-firestore-sync-design.md.
+//
+// PRODUCTION SETUP: replace the two emails below with your real Google
+// account emails before pasting these rules into the Firebase console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAllowed() {
+      return request.auth != null &&
+        request.auth.token.email in [
+          'hod@example.com',
+          'cohod@example.com'
+        ];
+    }
+
+    match /deployments/main {
+      allow read, write: if isAllowed();
+
+      match /versions/{versionId} {
+        allow read, write: if isAllowed();
+      }
+    }
+  }
+}
