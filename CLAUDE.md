@@ -17,15 +17,22 @@ rationale.
   first — the whole point is a static site the school laptop can just open.
 - **No real student/teacher data in the repo.** The repo and the hosted page
   only ever contain code and the fictional `sample/` school. Real deployment
-  data lives in the HOD's browser (localStorage) and the Excel file they
-  carry. Check `.gitignore` before adding any file that might contain real
+  data lives in Firestore, shared between the HOD and their co-HOD via
+  Google Sign-In; access is restricted to a hardcoded two-email allowlist
+  enforced in `firestore.rules` (expanding access means editing that file
+  and re-pasting it into the Firebase console - never app code). Excel
+  export/import remains as a portability/backup format, not the primary
+  store. Check `.gitignore` before adding any file that might contain real
   names.
 - **Re-opening never re-solves.** Loading a saved Excel file or restoring a
   version must reproduce the exact same assignments — never trigger a fresh
   solve. Only the "Solve" button solves.
-- **The solver runs entirely offline.** HiGHS WASM is vendored in
-  `src/vendor/highs/` (copied from `node_modules/highs/build/`, not
-  imported live) so the page works with no internet at school.
+- **The HiGHS solve itself runs entirely offline.** HiGHS WASM is vendored
+  in `src/vendor/highs/` (copied from `node_modules/highs/build/`, not
+  imported live) so solving never needs a network call. The app as a
+  whole, however, now requires internet connectivity to load/save the
+  deployment (see Firestore sync below) - this is a deliberate trade
+  made when shared editing was added; it is not an oversight.
 
 ## How to add a new constraint layer
 
@@ -90,7 +97,11 @@ changes.
 | `src/model.js`           | Pure: `data` + enabled layers → CPLEX-LP text. Unit-testable without a browser.                                                                         |
 | `src/solve.js`           | Loads vendored HiGHS WASM, solves, parses assignments. Deterministic.                                                                                   |
 | `src/diagnose.js`        | Pre-checks + elastic re-solve → plain-language infeasibility messages.                                                                                  |
+| `src/auth.js`            | Google Sign-In wrapper (Firebase Auth). Gates app boot.                                                                                                 |
+| `src/ui/store.js`        | Single source of truth for in-memory `data`, backed by Firestore (`deployments/main`), with an optimistic-local + transactional overwrite guard.        |
+| `src/versions.js`        | Saved-version snapshots, stored in the `deployments/main/versions` Firestore subcollection.                                                             |
 | `sample/sample.json`     | Fictional school mirroring the real sheet's structure (bands, co-teaching, a placeholder teacher) — used by tests and as the demo/reset data in the UI. |
+| `firestore.rules`        | Security rules restricting all access to the two-email allowlist.                                                                                       |
 
 ## Testing
 
