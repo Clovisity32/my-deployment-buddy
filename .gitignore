@@ -11,7 +11,3 @@ Current Deployment Layout.png
 Current Deployment Layout.lnk
 /data/
 *.local.json
-
-# Firebase test-project service-account key - never commit (see
-# docs/superpowers/specs/2026-09-29-firestore-sync-design.md)
-firebase-service-account*.json
