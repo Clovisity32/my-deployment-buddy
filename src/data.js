@@ -1,5 +1,6 @@
-// Data model, validation, and localStorage persistence for the deployment solver.
-// Pure functions where possible so they're easy to unit test without a browser.
+// Data model and validation for the deployment solver. Persistence lives in
+// src/ui/store.js (Firestore-backed). Pure functions where possible so
+// they're easy to unit test without a browser.
 
 /** @typedef {{id:string, name:string, maxPeriods:number|null}} Role */
 /** @typedef {{id:string, name:string, discipline:string, stream:string, periods:number, levels:number[]}} Subject */
