@@ -75,7 +75,7 @@ npm install --save-dev firebase firebase-tools firebase-admin
 npm view firebase version
 ```
 
-Note the printed version (e.g. `12.19.0`) - Task 6's `index.html` import map (and every standalone test fixture's copy of it) pins this exact version in its `gstatic.com` CDN URLs; it is the ONLY place a version string appears (source files import bare `"firebase/*"` specifiers, never a versioned URL directly - see Task 3's note on why). If it differs from `12.19.0` used below, use the actual installed version consistently in every import map in this plan. (`firebase-tools` is kept as a devDependency even without emulators - it's occasionally useful for `firebase login`/`firebase projects:list` during setup - but no `firebase.json`/emulator config is needed since nothing in this plan calls `firebase emulators:*` or `firebase deploy` anymore; rules deploy happens programmatically via `firebase-admin`, Step 2 below.)
+Note the printed version (e.g. `10.14.1`) - Task 6's `index.html` import map (and every standalone test fixture's copy of it) pins this exact version in its `gstatic.com` CDN URLs; it is the ONLY place a version string appears (source files import bare `"firebase/*"` specifiers, never a versioned URL directly - see Task 3's note on why). If it differs from `10.14.1` used below, use the actual installed version consistently in every import map in this plan. (`firebase-tools` is kept as a devDependency even without emulators - it's occasionally useful for `firebase login`/`firebase projects:list` during setup - but no `firebase.json`/emulator config is needed since nothing in this plan calls `firebase emulators:*` or `firebase deploy` anymore; rules deploy happens programmatically via `firebase-admin`, Step 2 below.)
 
 - [ ] **Step 2: Create `tests/support/admin.js`**
 
@@ -499,9 +499,9 @@ Create `tests/e2e/fixtures/auth-harness.html`:
     <script type="importmap">
       {
         "imports": {
-          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
         }
       }
     </script>
@@ -814,9 +814,9 @@ Create `tests/e2e/fixtures/store-harness.html`:
     <script type="importmap">
       {
         "imports": {
-          "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
-          "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
         }
       }
     </script>
@@ -1157,15 +1157,15 @@ Add to `index.html`'s `<head>`, before the closing `</head>` tag (it must appear
 <script type="importmap">
   {
     "imports": {
-      "firebase/app": "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
-      "firebase/auth": "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js",
-      "firebase/firestore": "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js"
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+      "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
     }
   }
 </script>
 ```
 
-(Match the `12.19.0` to whatever `npm view firebase version` actually printed in Task 1 Step 1.)
+(Match the `10.14.1` to whatever `npm view firebase version` actually printed in Task 1 Step 1.)
 
 - [ ] **Step 2: Add the sign-in screen and wrap the app shell**
 
