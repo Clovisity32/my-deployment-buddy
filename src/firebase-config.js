@@ -3,14 +3,6 @@
 // hiding these. See
 // docs/superpowers/specs/2026-09-29-firestore-sync-design.md "Auth & access
 // control".
-//
-// PRODUCTION SETUP: replace with your real Firebase project's config
-// (Firebase console -> Project settings -> General -> Your apps -> Web app).
-const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_FIREBASE_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "demo-my-deployment-buddy",
-};
 
 // Opt into the local emulator suite via a query param, e.g.
 // index.html?emulators=1 - no build step, no env vars, works identically
@@ -18,5 +10,27 @@ const firebaseConfig = {
 const useEmulators =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).has("emulators");
+
+// projectId must stay "demo-my-deployment-buddy" in emulator mode - it's
+// the id every test helper and npm script (firebase.json/.firebaserc,
+// `firebase emulators:exec --project demo-my-deployment-buddy`, the e2e
+// suite's own clear-data fetch() calls) hardcodes to scope the local
+// emulator's in-memory data. Using the real project id there would point
+// the app at a different, empty data namespace inside the same emulator
+// process and break every test that seeds/clears data by that id.
+const firebaseConfig = useEmulators
+  ? {
+      apiKey: "demo-api-key",
+      authDomain: "demo-my-deployment-buddy.firebaseapp.com",
+      projectId: "demo-my-deployment-buddy",
+    }
+  : {
+      apiKey: "AIzaSyBjSEcAw5DPZTN5607bizbOHI-lZDgvKWE",
+      authDomain: "mydeploymentbuddy.firebaseapp.com",
+      projectId: "mydeploymentbuddy",
+      storageBucket: "mydeploymentbuddy.firebasestorage.app",
+      messagingSenderId: "994115696333",
+      appId: "1:994115696333:web:8837068c275cd62db55b84",
+    };
 
 export { firebaseConfig, useEmulators };
