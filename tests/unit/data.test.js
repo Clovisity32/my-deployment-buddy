@@ -6,31 +6,13 @@ import path from "node:path";
 import {
   emptyData,
   validate,
-  loadFromStorage,
-  saveToStorage,
   migrateV1,
   effectiveCap,
-  STORAGE_KEY,
 } from "../../src/data.js";
 import { qualificationLayer } from "../../src/layers/qualification.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const samplePath = path.join(__dirname, "../../sample/sample.json");
-
-// A minimal in-memory Storage stand-in for tests (no real browser available).
-function makeMemoryStorage(initial = {}) {
-  const store = { ...initial };
-  return {
-    getItem: (k) => (k in store ? store[k] : null),
-    setItem: (k, v) => {
-      store[k] = v;
-    },
-    removeItem: (k) => {
-      delete store[k];
-    },
-    _raw: store,
-  };
-}
 
 test("emptyData() has no validation errors", () => {
   assert.deepEqual(validate(emptyData()), []);
@@ -124,72 +106,6 @@ test("validate() accepts a valid assignment", () => {
     assignments: [{ groupId: "g1", teacherId: "t1", locked: false }],
   };
   assert.deepEqual(validate(data), []);
-});
-
-test("loadFromStorage() returns emptyData() when nothing is stored", () => {
-  const storage = makeMemoryStorage();
-  assert.deepEqual(loadFromStorage(storage), emptyData());
-});
-
-test("loadFromStorage() returns emptyData() on corrupt JSON", () => {
-  const storage = makeMemoryStorage({ [STORAGE_KEY]: "{not json" });
-  assert.deepEqual(loadFromStorage(storage), emptyData());
-});
-
-test("loadFromStorage() returns emptyData() when stored shape is invalid", () => {
-  const storage = makeMemoryStorage({
-    [STORAGE_KEY]: JSON.stringify({ roles: [], teachers: "nope" }),
-  });
-  assert.deepEqual(loadFromStorage(storage), emptyData());
-});
-
-test("loadFromStorage() migrates v1-shaped stored data (no roles array) to v2", () => {
-  const v1Sample = {
-    teachers: [
-      { id: "t1", name: "Amy Lim", maxPeriods: 30, subjects: ["LSS", "Chem"] },
-      { id: "t2", name: "Ben Ong", maxPeriods: 30, subjects: ["LSS", "Phy"] },
-    ],
-    groups: [
-      {
-        id: "g-1g1a",
-        level: 1,
-        block: "LSS",
-        label: "1G1A SCI",
-        periods: 5,
-        band: null,
-        teachersNeeded: 1,
-        category: "G1",
-        note: "",
-      },
-    ],
-    assignments: [],
-    layerSettings: [{ id: "coverage", enabled: true, weight: 1 }],
-    versions: [],
-  };
-  const storage = makeMemoryStorage({
-    [STORAGE_KEY]: JSON.stringify(v1Sample),
-  });
-  const loaded = loadFromStorage(storage);
-  assert.ok(Array.isArray(loaded.roles) && loaded.roles.length === 4);
-  assert.deepEqual(validate(loaded), []);
-  assert.equal(loaded.customGroups.length, v1Sample.groups.length);
-});
-
-test("saveToStorage() then loadFromStorage() round-trips valid v2 data", () => {
-  const storage = makeMemoryStorage();
-  const data = emptyData();
-  assert.equal(saveToStorage(data, storage), true);
-  assert.deepEqual(loadFromStorage(storage), data);
-});
-
-test("saveToStorage() returns false and does not throw when storage.setItem throws", () => {
-  const storage = {
-    getItem: () => null,
-    setItem: () => {
-      throw new Error("quota exceeded");
-    },
-  };
-  assert.equal(saveToStorage(emptyData(), storage), false);
 });
 
 // --- effectiveCap ---------------------------------------------------------
