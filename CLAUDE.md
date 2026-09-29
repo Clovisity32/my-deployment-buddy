@@ -91,7 +91,7 @@ changes.
 
 | File                     | Responsibility                                                                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/data.js`            | Schema, `validate()`, localStorage load/save. All fail-safe (never throws).                                                                             |
+| `src/data.js`            | Schema and `validate()`. All fail-safe (never throws). Persistence lives in `src/ui/store.js` (Firestore-backed).                                       |
 | `src/layers/registry.js` | Ordered list of layers + the contract they implement.                                                                                                   |
 | `src/layers/*.js`        | One constraint/objective concern each.                                                                                                                  |
 | `src/model.js`           | Pure: `data` + enabled layers → CPLEX-LP text. Unit-testable without a browser.                                                                         |
