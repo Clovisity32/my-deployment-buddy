@@ -1,9 +1,41 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * Drives the Auth emulator's real IDP Login Widget popup - it is not
+ * auto-accepted. See Task 3's auth.spec.js comment for how this was
+ * verified against the running emulator.
+ */
+async function signInAsHod(page, email = "hod@example.com") {
+  await page.goto("/index.html?emulators=1");
+  const popupPromise = page.context().waitForEvent("page");
+  await page.click("#sign-in-button");
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+  if ((await existing.count()) > 0) {
+    await existing.first().click();
+  } else {
+    await popup.click("#add-account-button");
+    await popup.fill("#email-input", email);
+    await popup.click("#sign-in");
+  }
+  await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
+}
+
+/**
+ * Reads the app's live in-memory data straight from src/ui/store.js's
+ * getData() - localStorage.getItem("deploymentBuddy.v2") no longer exists
+ * (Firestore is now the source of truth, see Task 8). Dynamic-importing the
+ * same module URL index.html already loaded returns the exact same
+ * singleton the UI reads/writes, so this reflects the app's state
+ * immediately (getData() is updated synchronously, before the Firestore
+ * write even resolves - see store.js's setData()).
+ */
 async function readStoredData(page) {
-  return page.evaluate(() =>
-    JSON.parse(localStorage.getItem("deploymentBuddy.v2") || "null"),
-  );
+  return page.evaluate(async () => {
+    const { getData } = await import("/src/ui/store.js");
+    return getData();
+  });
 }
 
 /** Mirrors src/data.js's effectiveCap() without importing an ES module into the test. */
@@ -13,9 +45,20 @@ function effectiveCap(data, teacher) {
 }
 
 async function loadSample(page) {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  // Firestore (deployments/main) is now the single shared backing store for
+  // every client, including every test in this file and every earlier
+  // test/task run against this same long-lived emulator this session -
+  // localStorage.clear() no longer isolates a test from leftover data.
+  // Wiping the emulator's documents first restores that isolation, and
+  // matters beyond tidiness: src/ui/classes.js's "No. of classes" inputs are
+  // prefilled from whatever initStore() fetched, once, at boot - stale
+  // classes left over from a previous test would silently feed the next
+  // test's "Generate classes" click.
+  await fetch(
+    "http://127.0.0.1:8081/emulator/v1/projects/demo-my-deployment-buddy/databases/(default)/documents",
+    { method: "DELETE" },
+  );
+  await signInAsHod(page);
   await page.click("#btn-load-sample");
   await expect(page.locator("#table-teachers tbody tr")).toHaveCount(10);
 }
@@ -70,9 +113,11 @@ test.describe("My Deployment Buddy", () => {
 
     // Classes tab: the per-level "No. of classes" inputs are only pre-filled
     // from data once, at boot (before the sample is loaded), so they're
-    // still blank here. Clicking Generate with nothing entered is therefore
-    // a deterministic no-op - generateClasses() leaves any level with no
-    // count untouched - which is enough to confirm regeneration doesn't crash.
+    // still blank here - loadSample() wipes the emulator's Firestore
+    // documents before signing in, so boot has nothing to prefill from.
+    // Clicking Generate with nothing entered is therefore a deterministic
+    // no-op - generateClasses() leaves any level with no count untouched -
+    // which is enough to confirm regeneration doesn't crash.
     await page.click('nav.tabs button[data-tab="classes"]');
     await page.click("#btn-generate-classes");
     await expect(page.locator("#classes-grids")).toContainText(
@@ -146,7 +191,7 @@ test.describe("My Deployment Buddy", () => {
     }
 
     // Spot-check the Deployment View actually reflects the solve (UI
-    // wiring, not just localStorage). Sheet layout should show real teacher
+    // wiring, not just the store). Sheet layout should show real teacher
     // names in at least one seat, not blank/undefined.
     await page.click('nav.tabs button[data-tab="deployment"]');
     const printNames = await page
@@ -169,9 +214,12 @@ test.describe("My Deployment Buddy", () => {
     await expect(page.locator(".deployment-block").first()).toBeVisible();
 
     // Re-opening never re-solves: reload and confirm nothing changed and no
-    // solve ran automatically.
+    // solve ran automatically. Auth persists across reload (Firebase's
+    // default IndexedDB persistence), so this lands straight back in
+    // #app-shell without a fresh sign-in.
     const before = await readStoredData(page);
     await page.reload();
+    await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
     await expect(page.locator("#solve-status")).toBeEmpty();
 
     const after = await readStoredData(page);
@@ -247,11 +295,14 @@ test.describe("My Deployment Buddy", () => {
     await expect(selectAfter).toHaveValue(lockedTeacherId);
     await expect(lockCheckboxAfter).toBeChecked();
 
-    // The pre-solve snapshot should have been saved automatically.
+    // The pre-solve snapshot should have been saved automatically. Versions
+    // now render asynchronously off a Firestore subcollection fetch (Task
+    // 5), hence the generous timeout.
     await page.click('nav.tabs button[data-tab="versions"]');
-    await expect(page.locator("#versions-list li")).toContainText([
-      "Auto-save before solve",
-    ]);
+    await expect(page.locator("#versions-list li")).toContainText(
+      ["Auto-save before solve"],
+      { timeout: 10000 },
+    );
   });
 
   test("solving twice in a row gives the same assignments (deterministic)", async ({
@@ -282,25 +333,87 @@ test.describe("My Deployment Buddy", () => {
     expect(download.suggestedFilename()).toBe("deployment.xlsx");
     const downloadPath = await download.path(); // Playwright already saved it to a temp location.
 
-    // Start from a clean slate, as if this were a different browser at school.
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-    expect(await readStoredData(page)).toBeNull();
+    // Firestore is the shared source of truth now - there's no client-side
+    // "clean slate" to reload into (localStorage.clear() went away with
+    // localStorage itself, Task 8). Instead, mutate the current data first
+    // so re-importing the exported file is a genuine round-trip check (proof
+    // that import actually overwrites the current state), not a no-op
+    // comparison against data nothing ever touched.
+    await page.click('nav.tabs button[data-tab="subjects"]');
+    await page.click("#btn-add-subject");
+    await expect(page.locator("#save-status")).toHaveText("Saved", {
+      timeout: 10000,
+    });
+    const changed = await readStoredData(page);
+    expect(changed.subjects.length).toBe(before.subjects.length + 1);
+
+    // #solve-status still shows the "Solved" message from the solve() call
+    // above (nothing resets it without a reload, unlike the old
+    // localStorage.clear()+reload flow) - capture it so the post-import
+    // check below proves import didn't trigger a *new* solve, rather than
+    // asserting emptiness that was never true to begin with.
+    const solveStatusBeforeImport = await page
+      .locator("#solve-status")
+      .textContent();
 
     await page.click("#btn-import");
     await page.setInputFiles("#file-input", downloadPath);
 
-    // Give the import a moment; then confirm no solve ran (status area stays
-    // empty) and the restored deployment matches exactly.
+    // Give the import a moment; then confirm no solve ran (the status area
+    // is untouched, still showing the earlier solve's message, not
+    // "Solving…" or a fresh result) and the restored deployment matches
+    // exactly.
     await expect(page.locator("#table-teachers tbody tr")).toHaveCount(
       before.teachers.length,
     );
-    await expect(page.locator("#solve-status")).toBeEmpty();
+    await expect(page.locator("#solve-status")).toHaveText(
+      solveStatusBeforeImport,
+    );
 
     const after = await readStoredData(page);
     const key = (d) =>
       new Set(d.assignments.map((a) => `${a.teacherId}|${a.groupId}`));
     expect(key(after)).toEqual(key(before));
+    expect(after.subjects.length).toBe(before.subjects.length);
     expect(after.versions.length).toBe(before.versions.length);
+  });
+
+  test("signing in with an email not on the allowlist is rejected with a clear message, not a blank app", async ({
+    page,
+  }) => {
+    // hod@example.com and cohod@example.com are the only allowlisted emails
+    // (firestore.rules) - sign in as a third, non-allowlisted identity via
+    // the same widget flow signInAsHod() drives, by passing a different email.
+    await signInAsHod(page, "someone-else@example.com");
+    // Signed in (Auth doesn't restrict by email), but Firestore denies every
+    // read/write for this identity - initStore() must surface that as a
+    // message, not a silent blank page.
+    await expect(page.locator("body")).toContainText(
+      /could not load the deployment/i,
+      { timeout: 10000 },
+    );
+  });
+
+  test("reloading after a solve still never triggers a re-solve, now that data loads from Firestore", async ({
+    page,
+  }) => {
+    await signInAsHod(page);
+    await page.click("#btn-load-sample");
+    await page.click('[data-tab="layers"]');
+    await page.click("#btn-solve");
+    await expect(page.locator("#solve-status")).toContainText("Solved", {
+      timeout: 15000,
+    });
+    const assignedBefore = await page
+      .locator('[data-action="reassign"]')
+      .evaluateAll((els) => els.map((el) => el.value));
+
+    await page.reload();
+    await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("#solve-status")).not.toContainText("Solving");
+    const assignedAfter = await page
+      .locator('[data-action="reassign"]')
+      .evaluateAll((els) => els.map((el) => el.value));
+    expect(assignedAfter).toEqual(assignedBefore);
   });
 });

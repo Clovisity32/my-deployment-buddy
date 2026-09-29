@@ -141,15 +141,22 @@ async function writeToFirestore(next) {
  * Updates the in-memory cache and notifies listeners immediately (instant
  * UI feedback, same feel as the old localStorage-backed store), then writes
  * to Firestore in the background. A no-op once isBlocked() is true.
+ *
+ * Returns the write's promise so callers that need the write to be durable
+ * before proceeding (e.g. onSolve() in src/ui.js, before it's safe to say
+ * "Solved" and let the HOD reload) can `await setData(...)`. Every other
+ * caller keeps the original fire-and-forget behaviour by simply not
+ * awaiting it - the local update/notify above already happened
+ * synchronously either way.
  */
 function setData(next) {
   if (blocked) {
     notifyStatus("blocked", "Reload the page to continue.");
-    return;
+    return Promise.resolve();
   }
   data = next;
   listeners.forEach((fn) => fn());
-  writeToFirestore(next);
+  return writeToFirestore(next);
 }
 
 export {

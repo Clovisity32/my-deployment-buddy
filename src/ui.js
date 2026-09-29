@@ -164,7 +164,12 @@ async function onSolve() {
     const result = await solveModel(model);
 
     if (result.optimal) {
-      setData({
+      // Await the write: reload-never-re-solves also means a reload right
+      // after "Solved" must see these exact assignments, not whatever was
+      // last durable in Firestore - without this await, setData()'s write
+      // is still in flight (fire-and-forget) when "Solved" appears, and an
+      // immediate reload can race it and lose the solve.
+      await setData({
         ...working,
         assignments: result.assignments.map((a) => ({
           ...a,
