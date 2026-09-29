@@ -121,6 +121,38 @@ test("initStore() loads the current doc and setData() writes it back with a 'sav
   });
 });
 
+test("two rapid same-session setData() calls, neither awaited before the next fires, don't lose the later edit or falsely conflict", async ({
+  page,
+}) => {
+  await loadHarnessAndSignIn(page);
+
+  await page.click("#save-twice");
+  // Must settle on "saved", never get stuck on "blocked" or "conflict" -
+  // both writes came from the same session, so there is nothing to
+  // conflict with.
+  await expect(page.locator("#status-out")).toHaveText("saved", {
+    timeout: 10000,
+  });
+
+  // The later edit ("Second") must be what's actually persisted - not
+  // silently dropped in favour of the earlier one. Re-fetch from Firestore
+  // (bypassing the in-memory cache) rather than opening a second signed-in
+  // page, to prove durability without a second, unrelated sign-in flow.
+  await page.click("#reload");
+  await expect(page.locator("#data-out")).toContainText("Second", {
+    timeout: 10000,
+  });
+  const persisted = JSON.parse(await page.locator("#data-out").textContent());
+  expect(persisted.roles[0].name).toBe("Second");
+
+  // The session must not have been left permanently blocked by the rapid
+  // pair - a normal save afterwards still succeeds.
+  await page.click("#save");
+  await expect(page.locator("#status-out")).toHaveText("saved", {
+    timeout: 10000,
+  });
+});
+
 test("two clients both starting from a not-yet-created doc: the second save is blocked, not silently merged", async ({
   context,
 }) => {

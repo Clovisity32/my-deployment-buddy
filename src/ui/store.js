@@ -137,17 +137,47 @@ async function writeToFirestore(next) {
   }
 }
 
+// Writes are serialized through this chain, one writeToFirestore() call in
+// flight at a time, coalescing to the latest queued value if more setData()
+// calls arrive while a write is pending. Every tab module fires setData()
+// per keystroke with nothing awaited in between, so without this queue,
+// concurrent same-session writes race each other's transactions: either an
+// older write's retry lands after a newer one (silently overwriting it) or
+// the conflict guard - built and tested only for the cross-session case -
+// mistakes the user's own overlapping write for someone else's and blocks
+// the session.
+let writeQueue = Promise.resolve();
+let hasQueuedValue = false;
+let queuedValue = null;
+let queuedResolvers = [];
+
+async function runQueuedWrite() {
+  if (!hasQueuedValue) return;
+  const value = queuedValue;
+  const resolvers = queuedResolvers;
+  hasQueuedValue = false;
+  queuedValue = null;
+  queuedResolvers = [];
+  if (blocked) {
+    notifyStatus("blocked", "Reload the page to continue.");
+  } else {
+    await writeToFirestore(value);
+  }
+  resolvers.forEach((resolve) => resolve());
+}
+
 /**
  * Updates the in-memory cache and notifies listeners immediately (instant
- * UI feedback, same feel as the old localStorage-backed store), then writes
- * to Firestore in the background. A no-op once isBlocked() is true.
+ * UI feedback, same feel as the old localStorage-backed store), then queues
+ * a write to Firestore. A no-op once isBlocked() is true.
  *
- * Returns the write's promise so callers that need the write to be durable
- * before proceeding (e.g. onSolve() in src/ui.js, before it's safe to say
- * "Solved" and let the HOD reload) can `await setData(...)`. Every other
- * caller keeps the original fire-and-forget behaviour by simply not
- * awaiting it - the local update/notify above already happened
- * synchronously either way.
+ * Returns a promise that resolves once `next` (or a later value that
+ * superseded it in the queue) has been durably written, so callers that
+ * need the write to be durable before proceeding (e.g. onSolve() in
+ * src/ui.js, before it's safe to say "Solved" and let the HOD reload) can
+ * `await setData(...)`. Every other caller keeps the original fire-and-
+ * forget behaviour by simply not awaiting it - the local update/notify
+ * above already happened synchronously either way.
  */
 function setData(next) {
   if (blocked) {
@@ -156,7 +186,12 @@ function setData(next) {
   }
   data = next;
   listeners.forEach((fn) => fn());
-  return writeToFirestore(next);
+  return new Promise((resolve) => {
+    hasQueuedValue = true;
+    queuedValue = next;
+    queuedResolvers.push(resolve);
+    writeQueue = writeQueue.then(runQueuedWrite);
+  });
 }
 
 export {

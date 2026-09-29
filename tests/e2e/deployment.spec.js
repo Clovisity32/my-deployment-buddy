@@ -326,6 +326,13 @@ test.describe("My Deployment Buddy", () => {
     await solve(page);
     const before = await readStoredData(page);
 
+    // Versions now live in a Firestore subcollection, not in `data.versions`
+    // (always an empty array on the main doc regardless - see data.js's
+    // emptyData()), so a real "import doesn't touch versions" check has to
+    // go through the Versions tab list, not the main doc's data.
+    await page.click('nav.tabs button[data-tab="versions"]');
+    const versionCountBefore = await page.locator("#versions-list li").count();
+
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#btn-export"),
@@ -375,7 +382,11 @@ test.describe("My Deployment Buddy", () => {
       new Set(d.assignments.map((a) => `${a.teacherId}|${a.groupId}`));
     expect(key(after)).toEqual(key(before));
     expect(after.subjects.length).toBe(before.subjects.length);
-    expect(after.versions.length).toBe(before.versions.length);
+
+    await page.click('nav.tabs button[data-tab="versions"]');
+    await expect(page.locator("#versions-list li")).toHaveCount(
+      versionCountBefore,
+    );
   });
 
   test("signing in with an email not on the allowlist is rejected with a clear message, not a blank app", async ({

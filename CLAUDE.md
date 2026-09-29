@@ -105,8 +105,12 @@ changes.
 
 ## Testing
 
-- `npm test` — `node --test tests/unit/*.test.js`. Fast; several tests run
-  the real HiGHS solver (no mocking) because it's fast enough and mocking it
+- `npm test` — wraps `node --test tests/unit/**/*.test.js` in
+  `firebase emulators:exec --only firestore` (needs Java on `PATH` for the
+  emulator, same as `npm run e2e`/`test:rules`), because `tests/unit/versions.test.js`
+  talks to a real Firestore emulator via `@firebase/rules-unit-testing` — no
+  hand-rolled Firestore mock. Still fast otherwise; several tests run the
+  real HiGHS solver (no mocking) because it's fast enough and mocking it
   would hide real LP-generation bugs (two were caught this way already: a
   duplicate-variable objective term, and dashes in ids breaking the LP
   parser — see the regression tests in `tests/unit/solve.test.js`).
