@@ -1,7 +1,8 @@
-// Browser UI boot: wires together the store (src/ui/store.js) and each tab
-// module under src/ui/. Keeps only what doesn't belong to a single tab
-// module - the Solve/Layers panel, the Versions tab, file actions (sample
-// load / Excel import-export), and boot/tabs.
+// Browser UI boot: gates the app behind Google Sign-In (src/auth.js), then
+// wires together the store (src/ui/store.js) and each tab module under
+// src/ui/. Keeps only what doesn't belong to a single tab module - the
+// Solve/Layers panel, the Versions tab, file actions (sample load / Excel
+// import-export), and boot/tabs.
 
 import { validate } from "./data.js";
 import { buildModel } from "./model.js";
@@ -17,7 +18,15 @@ import { exportWorkbook, importWorkbook } from "./excel.js";
 import { getLayers } from "./layers/registry.js";
 
 import { esc, genId } from "./ui/dom.js";
-import { getData, setData, onChange, isDirty, clearDirty } from "./ui/store.js";
+import {
+  initStore,
+  getData,
+  setData,
+  onChange,
+  onSaveStatusChange,
+  getFirestoreDb,
+} from "./ui/store.js";
+import { onAuthChange, signInWithGoogle, signOutUser } from "./auth.js";
 
 import { renderSubjects, wireSubjects } from "./ui/subjects.js";
 import { renderClasses, wireClasses } from "./ui/classes.js";
@@ -137,10 +146,18 @@ async function onSolve() {
   try {
     // Auto-snapshot before every solve, so a re-solve can always be undone
     // via the Versions tab - re-opening/re-solving must never lose a
-    // deployment the HOD already had.
-    let working = getData();
+    // deployment the HOD already had. Versions now save directly to their
+    // own Firestore subcollection (Task 5), independent of setData() below
+    // - the snapshot is durable as soon as saveVersion() resolves, whether
+    // or not the solve itself succeeds.
+    const working = getData();
     if ((working.assignments || []).length > 0) {
-      working = saveVersion(working, "Auto-save before solve");
+      await saveVersion(
+        getFirestoreDb(),
+        "Auto-save before solve",
+        working.assignments,
+        working.layerSettings,
+      );
     }
 
     const model = buildModel(working);
@@ -160,7 +177,6 @@ async function onSolve() {
       );
     } else {
       const diagnosis = await diagnoseInfeasibility(working, model);
-      setData(working); // Keep the auto-snapshot even though the solve failed.
       setStatus(
         `Could not find a deployment that satisfies every hard constraint:<ul>${diagnosis.issues.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`,
         "error",
@@ -189,53 +205,63 @@ function wasLocked(beforeData, assignment) {
 // ---------------------------------------------------------------------------
 
 function renderVersions() {
-  const data = getData();
   const list = document.getElementById("versions-list");
-  const versions = data.versions || [];
-  if (versions.length === 0) {
-    list.innerHTML = "<li>No saved versions yet.</li>";
-    return;
-  }
-  // Render in original (save) order but show newest first, keeping the
-  // original index so Restore/Compare can address versions.js by index.
-  const withIndex = versions.map((v, i) => ({ ...v, index: i }));
-  withIndex.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-  list.innerHTML = withIndex
-    .map((v) => {
-      const changes = compareAssignments(v.assignments, data.assignments || []);
-      return `
+  list.innerHTML = "<li>Loading versions…</li>";
+  const data = getData();
+  listVersions(getFirestoreDb(), data.assignments || []).then((versions) => {
+    if (versions.length === 0) {
+      list.innerHTML = "<li>No saved versions yet.</li>";
+      return;
+    }
+    list.innerHTML = versions
+      .map(
+        (v) => `
       <li>
         <strong>${esc(v.name)}</strong> - <small>${esc(new Date(v.timestamp).toLocaleString())}</small>
-        (${changes.length === 0 ? "same as current" : `${changes.length} group(s) differ from current`})
-        <button data-action="restore-version" data-index="${v.index}">Restore</button>
+        (${v.changedCount === 0 ? "same as current" : `${v.changedCount} group(s) differ from current`})
+        <button data-action="restore-version" data-id="${esc(v.id)}">Restore</button>
       </li>
-    `;
-    })
-    .join("");
+    `,
+      )
+      .join("");
+  });
 }
 
 function wireVersions() {
-  document.getElementById("btn-save-version").addEventListener("click", () => {
-    const input = document.getElementById("version-name");
-    const data = getData();
-    const name =
-      input.value.trim() || `Version ${(data.versions || []).length + 1}`;
-    setData(saveVersion(data, name));
-    input.value = "";
-  });
+  document
+    .getElementById("btn-save-version")
+    .addEventListener("click", async () => {
+      const input = document.getElementById("version-name");
+      const data = getData();
+      const name = input.value.trim() || "Version";
+      await saveVersion(
+        getFirestoreDb(),
+        name,
+        data.assignments,
+        data.layerSettings,
+      );
+      input.value = "";
+      renderVersions();
+    });
 
-  document.getElementById("versions-list").addEventListener("click", (e) => {
-    if (e.target.dataset.action !== "restore-version") return;
-    const index = Number(e.target.dataset.index);
-    if (
-      !confirm(
-        "Restore this version? Your current (unsaved-as-a-version) changes will be replaced.",
+  document
+    .getElementById("versions-list")
+    .addEventListener("click", async (e) => {
+      if (e.target.dataset.action !== "restore-version") return;
+      const versionId = e.target.dataset.id;
+      if (
+        !confirm(
+          "Restore this version? Your current (unsaved-as-a-version) changes will be replaced.",
+        )
       )
-    )
-      return;
-    setData(restoreVersion(getData(), index));
-  });
+        return;
+      const restored = await restoreVersion(
+        getFirestoreDb(),
+        getData(),
+        versionId,
+      );
+      setData(restored);
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +288,6 @@ function wireFileActions() {
 
   document.getElementById("btn-export").addEventListener("click", () => {
     exportWorkbook(getData(), "deployment.xlsx");
-    clearDirty();
   });
 
   document.getElementById("btn-import").addEventListener("click", () => {
@@ -284,18 +309,11 @@ function wireFileActions() {
           );
           return;
         }
-        clearDirty();
         setData(imported);
       } catch (err) {
         alert(`Could not read that Excel file: ${err.message}`);
       }
     });
-
-  window.addEventListener("beforeunload", (e) => {
-    if (!isDirty()) return;
-    e.preventDefault();
-    e.returnValue = "";
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -313,26 +331,89 @@ function renderAll() {
   renderVersions();
 }
 
-function init() {
-  initTabs();
-  wireSubjects();
-  wireClasses();
-  wireBands();
-  wireTeachers();
-  wireGroups();
-  wireLayers();
-  wireDeployment();
-  wireVersions();
-  wireFileActions();
-  onChange(renderAll);
+function renderSaveStatus({ status, message }) {
+  const box = document.getElementById("save-status");
+  if (!box) return;
+  const labels = {
+    idle: "",
+    saving: "Saving…",
+    saved: "Saved",
+    conflict: `⚠ ${message}`,
+    error: `⚠ ${message}`,
+    blocked: message || "Reload the page to continue.",
+  };
+  box.textContent = labels[status] || "";
+  box.classList.toggle(
+    "error",
+    status === "conflict" || status === "error" || status === "blocked",
+  );
+}
+
+let wired = false;
+
+async function onSignedIn(user) {
+  document.getElementById("sign-in-screen").hidden = true;
+  const shell = document.getElementById("app-shell");
+  shell.hidden = false;
+  document.getElementById("current-user-email").textContent = user.email;
+
+  try {
+    await initStore();
+  } catch (err) {
+    // A native alert() would never be visible to a test asserting on page
+    // content (Task 9's "unauthorized email" test checks page body text) -
+    // and a signed-in-but-denied user (wrong email, or Firestore briefly
+    // unreachable) deserves a persistent, readable message anyway, not a
+    // dismissable popup. #save-status already exists (Task 6) and is inside
+    // the now-visible #app-shell.
+    const status = document.getElementById("save-status");
+    status.textContent = `Could not load the deployment from the cloud: ${err.message}. Check your internet connection and that your account has access.`;
+    status.classList.add("error");
+    return;
+  }
+
+  if (!wired) {
+    wired = true;
+    onSaveStatusChange(renderSaveStatus);
+    initTabs();
+    wireSubjects();
+    wireClasses();
+    wireBands();
+    wireTeachers();
+    wireGroups();
+    wireLayers();
+    wireDeployment();
+    wireVersions();
+    wireFileActions();
+    onChange(renderAll);
+  }
   renderAll();
+}
+
+function onSignedOut() {
+  document.getElementById("sign-in-screen").hidden = false;
+  document.getElementById("app-shell").hidden = true;
+}
+
+function boot() {
+  document.getElementById("sign-in-button").addEventListener("click", () => {
+    signInWithGoogle().catch((err) => alert(`Sign-in failed: ${err.message}`));
+  });
+  document
+    .getElementById("sign-out-button")
+    .addEventListener("click", () => signOutUser());
+
+  onAuthChange((user) => {
+    if (user) onSignedIn(user);
+    else onSignedOut();
+  });
 }
 
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    init();
+    boot();
   }
 }
 
