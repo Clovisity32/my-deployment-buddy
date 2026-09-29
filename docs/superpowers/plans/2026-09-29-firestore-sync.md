@@ -6,165 +6,120 @@
 
 **Architecture:** Firestore stores the deployment as one document (`deployments/main`, everything except `versions`) plus a `versions` subcollection (one doc per saved snapshot, so the main document never grows unbounded). `src/ui/store.js` keeps its exact current `getData()`/`setData()`/`onChange()` public API — every tab UI module (`subjects.js`, `classes.js`, `bands.js`, `teachers.js`, `groups.js`, `deployment.js`) needs zero changes — only the store's internals swap from `localStorage` to Firestore, with an optimistic local cache (instant UI updates) backed by an async write with a transaction-based overwrite guard. Google Sign-In (Firebase Auth) gates the app; Firestore security rules restrict access to a two-email allowlist.
 
-**Tech Stack:** Firebase JS SDK v10 (modular; browser code imports it via bare specifiers - `"firebase/app"`, `"firebase/auth"`, `"firebase/firestore"` - resolved by a native browser import map pointing at the `gstatic.com` ESM CDN, so the same source files also resolve those specifiers through `node_modules/firebase` under plain `node --test`, with no bundler and no experimental Node flags), a **real, separate Firebase "test" project** (no Local Emulator Suite - this dev machine has no Java, which the emulator suite requires, and the user chose not to install one), `firebase-admin` for minting custom sign-in tokens and deploying security rules programmatically in tests, `firebase-tools` as a devDependency (occasionally useful for `firebase login`/`firebase projects:list`, not required by any test).
+**Tech Stack:** Firebase JS SDK v10 (modular; browser code imports it via bare specifiers - `"firebase/app"`, `"firebase/auth"`, `"firebase/firestore"` - resolved by a native browser import map pointing at the `gstatic.com` ESM CDN, so the same source files also resolve those specifiers through `node_modules/firebase` under plain `node --test`, with no bundler and no experimental Node flags), Firebase Local Emulator Suite (Firestore + Auth) for testing, `@firebase/rules-unit-testing` for security-rules tests, `firebase-tools` as a devDependency (test/dev tooling only, does not affect the shipped static site).
 
 **Spec:** `docs/superpowers/specs/2026-09-29-firestore-sync-design.md`
 
 ## Global Constraints
 
-- No build step for the shipped site: every `src/` file stays a native ES module loadable via `<script type="module">` and (where applicable) `node --test`. Firebase is loaded via bare specifiers resolved by an import map, never bundled into the shipped page.
-- No real student/teacher data in the repo (`sample/sample.json` stays fictional). Real Firebase config values (API key, project ID) ARE committed - they are public client identifiers, not secrets; security rules are what protects the data. A downloaded service-account JSON key is NEVER committed (`.gitignore`'d in Task 1) - it is a real secret, unlike the client config values.
+- No build step for the shipped site: every `src/` file stays a native ES module loadable via `<script type="module">` and (where applicable) `node --test`. Firebase is loaded via direct CDN `import` URLs, never `npm install`ed into the shipped bundle.
+- No real student/teacher data in the repo (`sample/sample.json` stays fictional). Real Firebase config values (API key, project ID) ARE committed - they are public client identifiers, not secrets; security rules are what protects the data.
 - The app now requires internet connectivity to load/save deployment data (this project's prior "solver runs entirely offline" guarantee is deliberately narrowed to "the HiGHS solve itself is offline" - see spec).
 - Access is restricted to exactly two Google account emails, enforced server-side in `firestore.rules` - never trust a client-side check alone.
 - Every value interpolated into `innerHTML` (including attributes) goes through `esc()` from `src/ui/dom.js`, per this project's existing convention.
-- Automated tests NEVER touch the real/production Firebase project - they run exclusively against a separate, dedicated test project (`src/firebase-config.js`'s `testConfig`, selected via `?test=1`), so a bug in a test can never corrupt a real HOD's actual saved deployment.
-- `npm test` (the `tests/unit/**` glob) stays fast, offline, and network-free - exactly as it is today. Every test that needs the real test Firebase project (network + `FIREBASE_TEST_SERVICE_ACCOUNT`) lives under `tests/integration/` instead, run via the separate `npm run test:integration` script, never swept into `npm test`.
+- `npm test` (unit) must stay fast and mock-free where the codebase already tests real solves; new Firestore-dependent tests use the real Local Emulator Suite, never a hand-rolled Firestore mock.
 
 ## Review Focus
 
 - A save that races another save (both HOD and co-HOD editing near-simultaneously) must never silently drop one person's change - the overwrite guard's transaction must be exercised with a real concurrent write in a test, not just asserted about in isolation.
-- Signing in as a Google account NOT on the two-email allowlist must be cleanly rejected (clear message, no partial data leak) - tested against the real deployed `firestore.rules` on the real test project, not just described in the file.
+- Signing in with a Google account NOT on the two-email allowlist must be cleanly rejected (clear message, no partial data leak) - tested against the real Firestore emulator rules, not just described in `firestore.rules`.
 - Reloading the page after a successful solve must still never trigger a re-solve, now that data loads from Firestore instead of localStorage - this project's core non-negotiable, re-verified under the new backend.
 - Restoring a saved version must work with the new subcollection-backed `versions.js` API exactly as it did with the old array-based one (same assignments/layerSettings end up applied) - a version saved before this change has no equivalent (out of scope per spec), but a version saved and restored entirely within the new system must round-trip exactly.
-- A network/Firestore error while loading (e.g., the test project is unreachable, or a permission-denied from the rules) must show the HOD a clear, actionable message instead of a blank page or a raw stack trace in the console.
+- A network/Firestore error while loading (e.g., emulator or Firestore is unreachable) must show the HOD a clear, actionable message instead of a blank page or a raw stack trace in the console.
 
 ---
 
 ## File Structure
 
-- **Create** `tests/support/admin.js` - Firebase Admin SDK helpers (mint a custom sign-in token for a given email; programmatically deploy `firestore.rules` to the test project), used only by `tests/integration/*` and `tests/e2e/*`, never shipped.
+- **Create** `firebase.json` - emulator ports/config.
+- **Create** `.firebaserc` - default project id (`demo-my-deployment-buddy`, the special `demo-` prefix that lets emulators run with no real GCP project).
 - **Create** `firestore.rules` - the two-email allowlist security rules.
-- **Create** `src/firebase-config.js` - two Firebase project configs (production + a separate test project) + a `?test=1` query-param switch, so the same static file (no build step) can point at either.
-- **Create** `src/auth.js` - Firebase Auth wrapper: Google sign-in/out, current-user state, plus `signInWithToken()` for tests.
+- **Create** `src/firebase-config.js` - Firebase project config values + an `?emulators=1` query-param switch, so the same static file (no build step) can point at either real Firebase or the local emulators.
+- **Create** `src/auth.js` - Firebase Auth wrapper: Google sign-in/out, current-user state.
 - **Modify** `src/ui/store.js` - swap localStorage for Firestore, add the overwrite guard and save-status API.
 - **Modify** `src/versions.js` - swap the embedded `data.versions` array for the `deployments/main/versions` subcollection.
-- **Modify** `index.html` - add a sign-in screen, a save-status indicator, wrap the existing app markup in a hideable `#app-shell`, add the Firebase import map.
-- **Modify** `src/ui.js` - auth-gated boot sequence; async-aware Versions tab wiring; `onSolve()` updated for the new `saveVersion()` signature; exposes a test-only `window.__signInWithToken` hook when `useTestProject` is true.
+- **Modify** `index.html` - add a sign-in screen, a save-status indicator, wrap the existing app markup in a hideable `#app-shell`.
+- **Modify** `src/ui.js` - auth-gated boot sequence; async-aware Versions tab wiring; `onSolve()` updated for the new `saveVersion()` signature.
 - **Modify** `src/data.js` - remove `loadFromStorage`/`saveToStorage`/`STORAGE_KEY` (no longer meaningful; Firestore is now the source of truth).
-- **Modify** `tests/e2e/deployment.spec.js` - sign in via a minted custom token before each flow; add the conflict-guard and unauthorized-email tests from Review Focus.
+- **Modify** `playwright.config.js` - add the emulator suite as a second `webServer`.
+- **Modify** `tests/e2e/deployment.spec.js` - sign in via the Auth emulator before each flow; add the conflict-guard and unauthorized-email tests from Review Focus.
 - **Modify** `CLAUDE.md` - the two superseded non-negotiables + the new allowlist line, per the spec.
-- **Create** `tests/integration/firestore-rules.test.js`, `tests/integration/test-firebase-config.js` - security-rules tests against the real test project.
+- **Create** `tests/rules/firestore-rules.test.js` - security-rules tests via `@firebase/rules-unit-testing`.
 - **Modify** `tests/unit/data.test.js` - remove the now-deleted `loadFromStorage`/`saveToStorage` test cases.
-- **Modify** `tests/unit/versions.test.js` → **move to** `tests/integration/versions.test.js` - now needs the real test project (network + auth), so it moves out of the fast/offline `tests/unit/` suite.
-- **Modify** `package.json` - new devDependencies (`firebase`, `firebase-tools`, `firebase-admin`) and a `test:integration` script.
-- **Modify** `.gitignore` - the service-account key file pattern.
+- **Modify** `package.json` - new devDependencies (`firebase`, `firebase-tools`, `@firebase/rules-unit-testing`) and scripts (`emulators`, `test:rules`).
 
 ---
 
-### Task 1: Test-project scaffolding (no local emulator)
-
-This plan does NOT use the Firebase Local Emulator Suite (it requires a JRE; this machine has none, and the user chose not to install one - see the ledger). Instead, every automated test that needs auth/Firestore runs against a real, **separate Firebase "test" project** (free, distinct from whatever real project the HOD eventually deploys with), signing in via a **service-account-minted custom token** instead of a real Google OAuth popup (which headless browsers can't reliably automate) - this is Firebase's own documented pattern for testing Auth-gated apps without emulators.
-
-**Prerequisite (the user, not an agent, does this once before Task 2 can run for real):** create a second Firebase project dedicated to testing, enable Firestore and the Google Auth provider on it, and download a service-account JSON key (Firebase console → Project settings → Service accounts → Generate new private key). Set an environment variable `FIREBASE_TEST_SERVICE_ACCOUNT` pointing at that downloaded file's path before running `npm run test:integration` or the e2e suite. This task's own steps don't require the key to exist yet (they only install tooling and write helper code) - Task 2 is the first task whose tests actually need it.
+### Task 1: Emulator scaffolding
 
 **Files:**
 
-- Create: `tests/support/admin.js`
+- Create: `firebase.json`
+- Create: `.firebaserc`
 - Modify: `package.json`
-- Modify: `.gitignore`
 
 **Interfaces:**
 
 - Consumes: nothing (first task).
-- Produces (Tasks 2, 3, 9 import these): `mintCustomToken(email)` - `async`, ensures a Firebase Auth user with that email exists in the test project (creating one if needed) and returns a custom token string for it. `deployFirestoreRules()` - `async`, pushes the current `firestore.rules` file's content live on the test project via the Admin SDK's Security Rules API, so rules tests always exercise the exact file on disk, never a stale deploy.
+- Produces: a running local Firestore emulator on `127.0.0.1:8081` and Auth emulator on `127.0.0.1:9099`, reachable via `npm run emulators`; `firebase emulators:exec '<cmd>'` for one-shot test runs. Every later task that talks to Firestore/Auth uses these exact ports.
 
 - [ ] **Step 1: Install the tooling**
 
 ```bash
-npm install --save-dev firebase firebase-tools firebase-admin
+npm install --save-dev firebase firebase-tools @firebase/rules-unit-testing
 npm view firebase version
 ```
 
-Note the printed version (e.g. `10.14.1`) - Task 6's `index.html` import map (and every standalone test fixture's copy of it) pins this exact version in its `gstatic.com` CDN URLs; it is the ONLY place a version string appears (source files import bare `"firebase/*"` specifiers, never a versioned URL directly - see Task 3's note on why). If it differs from `10.14.1` used below, use the actual installed version consistently in every import map in this plan. (`firebase-tools` is kept as a devDependency even without emulators - it's occasionally useful for `firebase login`/`firebase projects:list` during setup - but no `firebase.json`/emulator config is needed since nothing in this plan calls `firebase emulators:*` or `firebase deploy` anymore; rules deploy happens programmatically via `firebase-admin`, Step 2 below.)
+Note the printed version (e.g. `10.14.1`) - Task 6's `index.html` import map (and every standalone test fixture's copy of it, per Task 3) pins this exact version in its `gstatic.com` CDN URLs; it is the ONLY place a version string appears (source files import bare `"firebase/*"` specifiers, never a versioned URL directly - see Task 3's note on why). If it differs from `10.14.1` used below, use the actual installed version consistently in every import map in this plan.
 
-- [ ] **Step 2: Create `tests/support/admin.js`**
+- [ ] **Step 2: Create `firebase.json`**
 
-```js
-// Node-only helper (never imported by browser code) wrapping the Firebase
-// Admin SDK against the TEST Firebase project - never the real/production
-// one. Lets automated tests (a) sign in as a specific identity without a
-// real Google OAuth popup, and (b) push the current firestore.rules file
-// live before asserting against it. See
-// docs/superpowers/specs/2026-09-29-firestore-sync-design.md and this
-// plan's Task 1.
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getSecurityRules } from "firebase-admin/security-rules";
-import { readFileSync } from "node:fs";
-
-function adminApp() {
-  const existing = getApps().find((a) => a.name === "test-admin");
-  if (existing) return existing;
-  const keyPath = process.env.FIREBASE_TEST_SERVICE_ACCOUNT;
-  if (!keyPath) {
-    throw new Error(
-      "FIREBASE_TEST_SERVICE_ACCOUNT env var is not set - point it at your TEST Firebase project's downloaded service-account JSON key file (see Task 1's prerequisite note).",
-    );
+```json
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8081 },
+    "ui": { "enabled": true, "port": 4000 }
   }
-  const serviceAccount = JSON.parse(readFileSync(keyPath, "utf8"));
-  return initializeApp({ credential: cert(serviceAccount) }, "test-admin");
 }
-
-/**
- * Ensures a Firebase Auth user with this email exists in the test project
- * (creating one if not) and returns a custom token for it.
- * @param {string} email
- * @returns {Promise<string>}
- */
-async function mintCustomToken(email) {
-  const auth = getAuth(adminApp());
-  let user;
-  try {
-    user = await auth.getUserByEmail(email);
-  } catch {
-    user = await auth.createUser({ email });
-  }
-  return auth.createCustomToken(user.uid);
-}
-
-/** Pushes the current firestore.rules file live on the test project. */
-async function deployFirestoreRules() {
-  const rules = getSecurityRules(adminApp());
-  const rulesFile = rules.createRulesFileFromSource(
-    readFileSync("firestore.rules", "utf8"),
-  );
-  const ruleset = await rules.createRuleset(rulesFile);
-  await rules.releaseFirestoreRuleset(ruleset);
-}
-
-export { mintCustomToken, deployFirestoreRules };
 ```
 
-- [ ] **Step 3: Add the `test:integration` npm script**
+(Firestore's emulator default port, 8080, is left free deliberately - this project's own static file server already uses 8080 via `npm run serve`, and both run together during e2e tests.)
+
+- [ ] **Step 3: Create `.firebaserc`**
+
+```json
+{
+  "projects": {
+    "default": "demo-my-deployment-buddy"
+  }
+}
+```
+
+A project id prefixed `demo-` runs the emulators with no real Firebase project or credentials required - correct for local dev/test. Task 3 documents where to put the REAL project id for production.
+
+- [ ] **Step 4: Add npm scripts**
 
 In `package.json`, add to `"scripts"`:
 
 ```json
-"test:integration": "node --test tests/integration/*.test.js"
+"emulators": "firebase emulators:start --project demo-my-deployment-buddy",
+"test:rules": "firebase emulators:exec --project demo-my-deployment-buddy --only firestore,auth \"node --test tests/rules/*.test.js\""
 ```
 
-(No emulator wrapper needed - this talks directly to the real test project over the network, so it needs `FIREBASE_TEST_SERVICE_ACCOUNT` set and internet access.)
+- [ ] **Step 5: Verify the emulators boot**
 
-- [ ] **Step 4: Add the service-account key to `.gitignore`**
-
-Add to `.gitignore`:
-
-```
-# Firebase test-project service-account key - never commit (see
-# docs/superpowers/specs/2026-09-29-firestore-sync-design.md)
-firebase-service-account*.json
-```
-
-- [ ] **Step 5: Verify the file is syntactically sound**
-
-Run: `node --check tests/support/admin.js`
-Expected: no output (exits 0) - confirms valid JS syntax. Actually calling `mintCustomToken`/`deployFirestoreRules` requires a real service-account key, which doesn't exist yet at this point in the plan - Task 2's own test run is this file's real functional checkpoint.
+Run: `npx firebase emulators:start --project demo-my-deployment-buddy &` then, after a few seconds, `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4000` then stop the emulator process.
+Expected: `200` (the Emulator UI is up), confirming both emulators started without config errors. Stop the background process before continuing.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/support/admin.js package.json package-lock.json .gitignore
-git commit -m "chore: add Firebase Admin SDK test helpers (custom-token sign-in, rules deploy) - no local emulator"
+git add firebase.json .firebaserc package.json package-lock.json
+git commit -m "chore: scaffold Firebase local emulator suite for Firestore sync"
 ```
 
 ---
@@ -174,116 +129,93 @@ git commit -m "chore: add Firebase Admin SDK test helpers (custom-token sign-in,
 **Files:**
 
 - Create: `firestore.rules`
-- Create: `tests/integration/test-firebase-config.js` (a small, self-contained client config for the TEST project - see note below)
-- Test: `tests/integration/firestore-rules.test.js`
+- Test: `tests/rules/firestore-rules.test.js`
 
 **Interfaces:**
 
-- Consumes: `mintCustomToken`, `deployFirestoreRules` from `tests/support/admin.js` (Task 1).
-- Produces: `firestore.rules`, deployed programmatically to the real test project by this task's own test (via `deployFirestoreRules()`, Task 1) - always exercising the exact file on disk. The production Firebase project needs these rules pasted into its console manually (documented in a comment in the file itself - this project has no CI/CD pipeline to auto-deploy rules there).
+- Consumes: the emulator config from Task 1 (Firestore on port 8081).
+- Produces: `firestore.rules`, deployed automatically to the emulator via `firebase.json`'s `firestore.rules` pointer (Task 1); the production Firebase project needs these rules pasted into its console manually (documented in a comment in the file itself - this project has no CI/CD pipeline to auto-deploy rules).
 
-This task's test is a standalone Node script that talks to the real client SDK (`firebase/firestore`, `firebase/auth`) against the TEST project, so it needs that project's client config (`apiKey`/`authDomain`/`projectId` - NOT the service-account key, a different, non-secret set of values). Rather than depend on Task 3 (which creates `src/firebase-config.js`, not written yet at this point in the plan), this task carries its own minimal copy in `tests/integration/test-firebase-config.js` - Task 3's note explains why this small duplication is intentional.
+- [ ] **Step 1: Write the failing rules tests**
 
-- [ ] **Step 1: Create `tests/integration/test-firebase-config.js`**
-
-```js
-// Minimal client config for the TEST Firebase project, used only by
-// tests/integration/firestore-rules.test.js. This project's real firebaseConfig
-// (Task 3, src/firebase-config.js) has its own copy of the same test
-// project's values - kept in sync manually; both are non-secret public
-// client identifiers (see docs/superpowers/specs/2026-09-29-firestore-sync-design.md).
-//
-// PRODUCTION SETUP: replace with your TEST project's config (Firebase
-// console -> Project settings -> General -> Your apps -> Web app). Match
-// this to src/firebase-config.js's testConfig once Task 3 exists.
-const testFirebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_TEST_FIREBASE_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_TEST_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_TEST_PROJECT_ID",
-};
-
-export { testFirebaseConfig };
-```
-
-- [ ] **Step 2: Write the failing rules tests**
-
-Create `tests/integration/firestore-rules.test.js`:
+Create `tests/rules/firestore-rules.test.js`:
 
 ```js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { initializeApp } from "firebase/app";
+import { readFileSync } from "node:fs";
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  collection,
-  addDoc,
-} from "firebase/firestore";
-import { getAuth, signInWithCustomToken, signOut } from "firebase/auth";
-import { mintCustomToken, deployFirestoreRules } from "../support/admin.js";
-import { testFirebaseConfig } from "./test-firebase-config.js";
+  initializeTestEnvironment,
+  assertSucceeds,
+  assertFails,
+} from "@firebase/rules-unit-testing";
+import { doc, getDoc, setDoc, collection, addDoc } from "firebase/firestore";
 
 const ALLOWED_EMAILS = ["hod@example.com", "cohod@example.com"];
 
-const app = initializeApp(testFirebaseConfig, "rules-test");
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-/** Resolves once, or throws Firestore's own "permission-denied" error. */
-async function expectDenied(promise) {
-  await assert.rejects(promise, (err) => err.code === "permission-denied");
-}
+let testEnv;
 
 test.before(async () => {
-  await deployFirestoreRules();
+  testEnv = await initializeTestEnvironment({
+    projectId: "demo-my-deployment-buddy",
+    firestore: {
+      rules: readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1",
+      port: 8081,
+    },
+  });
 });
 
 test.after(async () => {
-  await signOut(auth);
+  await testEnv.cleanup();
 });
 
 test("an allowed email can read and write deployments/main", async () => {
-  const token = await mintCustomToken(ALLOWED_EMAILS[0]);
-  await signInWithCustomToken(auth, token);
-  await setDoc(doc(db, "deployments/main"), { roles: [] });
-  const snap = await getDoc(doc(db, "deployments/main"));
-  assert.ok(snap.exists());
+  const ctx = testEnv.authenticatedContext("hod-uid", {
+    email: ALLOWED_EMAILS[0],
+  });
+  const db = ctx.firestore();
+  await assertSucceeds(setDoc(doc(db, "deployments/main"), { roles: [] }));
+  await assertSucceeds(getDoc(doc(db, "deployments/main")));
 });
 
 test("an allowed email can read and write a version in the versions subcollection", async () => {
-  const token = await mintCustomToken(ALLOWED_EMAILS[0]);
-  await signInWithCustomToken(auth, token);
-  const ref = await addDoc(collection(db, "deployments/main/versions"), {
-    name: "v1",
-    timestamp: new Date().toISOString(),
-    assignments: [],
-    layerSettings: [],
+  const ctx = testEnv.authenticatedContext("hod-uid", {
+    email: ALLOWED_EMAILS[0],
   });
-  await deleteDoc(ref); // keep the test project tidy across repeated runs
+  const db = ctx.firestore();
+  await assertSucceeds(
+    addDoc(collection(db, "deployments/main/versions"), {
+      name: "v1",
+      timestamp: new Date().toISOString(),
+      assignments: [],
+      layerSettings: [],
+    }),
+  );
 });
 
 test("an email not on the allowlist is denied", async () => {
-  const token = await mintCustomToken("stranger@example.com");
-  await signInWithCustomToken(auth, token);
-  await expectDenied(setDoc(doc(db, "deployments/main"), { roles: [] }));
-  await expectDenied(getDoc(doc(db, "deployments/main")));
+  const ctx = testEnv.authenticatedContext("stranger-uid", {
+    email: "stranger@example.com",
+  });
+  const db = ctx.firestore();
+  await assertFails(setDoc(doc(db, "deployments/main"), { roles: [] }));
+  await assertFails(getDoc(doc(db, "deployments/main")));
 });
 
 test("an unauthenticated request is denied", async () => {
-  await signOut(auth);
-  await expectDenied(getDoc(doc(db, "deployments/main")));
+  const ctx = testEnv.unauthenticatedContext();
+  const db = ctx.firestore();
+  await assertFails(getDoc(doc(db, "deployments/main")));
 });
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npm run test:integration` (using the real path to the key downloaded per Task 1's prerequisite; replace the placeholder values in `tests/integration/test-firebase-config.js` with your real test project's config first)
-Expected: FAIL - `firestore.rules` does not exist yet, so `deployFirestoreRules()` in `test.before` throws (file not found).
+Run: `npm run test:rules`
+Expected: FAIL - `firestore.rules` does not exist yet, or (once an empty/default-deny file exists) the "allowed email" tests fail because nothing grants access.
 
-- [ ] **Step 4: Write `firestore.rules`**
+- [ ] **Step 3: Write `firestore.rules`**
 
 ```
 rules_version = '2';
@@ -317,15 +249,15 @@ service cloud.firestore {
 }
 ```
 
-- [ ] **Step 5: Run it to verify it passes**
+- [ ] **Step 4: Run it to verify it passes**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npm run test:integration`
+Run: `npm run test:rules`
 Expected: PASS, all 4 tests.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add firestore.rules tests/integration/test-firebase-config.js tests/integration/firestore-rules.test.js
+git add firestore.rules tests/rules/firestore-rules.test.js
 git commit -m "feat: add Firestore security rules restricting access to a two-email allowlist"
 ```
 
@@ -341,55 +273,41 @@ git commit -m "feat: add Firestore security rules restricting access to a two-em
 
 **Interfaces:**
 
-- Consumes: `mintCustomToken` from `tests/support/admin.js` (Task 1, test-only).
+- Consumes: nothing new (talks to the Auth emulator directly).
 - Produces (for Tasks 4, 5, 7 to import):
-  - `src/firebase-config.js`: `export { firebaseConfig, useTestProject }` - `firebaseConfig` picks between two real Firebase projects' configs based on `useTestProject`, a boolean driven by an `?test=1` query param (real HODs never pass it; automated tests always do).
-  - `src/auth.js`: `export { app, onAuthChange, getCurrentUser, signInWithGoogle, signInWithToken, signOutUser }` where:
+  - `src/firebase-config.js`: `export { firebaseConfig, useEmulators }` - `firebaseConfig` is the plain config object; `useEmulators` is a boolean.
+  - `src/auth.js`: `export { app, onAuthChange, getCurrentUser, signInWithGoogle, signOutUser }` where:
     - `app` - the initialized Firebase App instance (Task 4/5 call `getFirestore(app)` with it).
     - `onAuthChange(fn)` - registers `fn(user | null)`, called once immediately with the current state and again on every sign-in/out. `user` is `{email, uid}`.
     - `getCurrentUser()` - returns `{email, uid} | null` synchronously (the last value `onAuthChange` delivered).
-    - `signInWithGoogle()` - `async`, throws on failure/popup-closed. The real production sign-in path.
-    - `signInWithToken(token)` - `async`, signs in with a pre-minted custom token (from `mintCustomToken`) instead of a popup. Test-only in practice, but a real, generally-useful Auth capability - not test scaffolding bolted onto the type system.
+    - `signInWithGoogle()` - `async`, throws on failure/popup-closed.
     - `signOutUser()` - `async`.
 
 - [ ] **Step 1: Create `src/firebase-config.js`**
 
 ```js
-// Firebase project configs. These values are public client identifiers,
-// not secrets - safe to commit. Access is protected by firestore.rules,
-// not by hiding these. See
-// docs/superpowers/specs/2026-09-29-firestore-sync-design.md "Auth &
-// access control".
+// Firebase project config. These values are public client identifiers, not
+// secrets - safe to commit. Access is protected by firestore.rules, not by
+// hiding these. See
+// docs/superpowers/specs/2026-09-29-firestore-sync-design.md "Auth & access
+// control".
 //
-// PRODUCTION SETUP: replace productionConfig with your real Firebase
-// project's config, and testConfig with a SEPARATE, dedicated test
-// project's config (Firebase console -> Project settings -> General ->
-// Your apps -> Web app, for each project) - automated tests must never
-// touch the real project's data. Keep testConfig in sync with
-// tests/integration/test-firebase-config.js's copy (Task 2).
-const productionConfig = {
+// PRODUCTION SETUP: replace with your real Firebase project's config
+// (Firebase console -> Project settings -> General -> Your apps -> Web app).
+const firebaseConfig = {
   apiKey: "REPLACE_WITH_YOUR_FIREBASE_API_KEY",
   authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
   projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
 };
 
-const testConfig = {
-  apiKey: "REPLACE_WITH_YOUR_TEST_FIREBASE_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_TEST_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_TEST_PROJECT_ID",
-};
-
-// Opt into the separate test project via a query param, e.g.
-// index.html?test=1 - no build step, no env vars, works identically
-// whether the file is opened locally or served from GitHub Pages. Real
-// HODs never pass this; automated tests always do.
-const useTestProject =
+// Opt into the local emulator suite via a query param, e.g.
+// index.html?emulators=1 - no build step, no env vars, works identically
+// whether the file is opened locally or served from GitHub Pages.
+const useEmulators =
   typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).has("test");
+  new URLSearchParams(window.location.search).has("emulators");
 
-const firebaseConfig = useTestProject ? testConfig : productionConfig;
-
-export { firebaseConfig, useTestProject };
+export { firebaseConfig, useEmulators };
 ```
 
 - [ ] **Step 2: Create `src/auth.js`**
@@ -400,14 +318,19 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithCustomToken,
   signOut,
   onAuthStateChanged,
+  connectAuthEmulator,
 } from "firebase/auth";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, useEmulators } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+if (useEmulators) {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", {
+    disableWarnings: true,
+  });
+}
 
 let currentUser = null;
 const listeners = [];
@@ -431,30 +354,11 @@ async function signInWithGoogle() {
   await signInWithPopup(auth, provider);
 }
 
-/**
- * Signs in with a pre-minted custom token instead of a real Google popup.
- * Real HODs never call this - the UI never exposes a button for it. Used
- * only by automated tests (via tests/support/admin.js's mintCustomToken(),
- * Task 1) against the separate test project, since headless browsers can't
- * reliably drive a real Google OAuth consent screen.
- * @param {string} token
- */
-async function signInWithToken(token) {
-  await signInWithCustomToken(auth, token);
-}
-
 async function signOutUser() {
   await signOut(auth);
 }
 
-export {
-  app,
-  onAuthChange,
-  getCurrentUser,
-  signInWithGoogle,
-  signInWithToken,
-  signOutUser,
-};
+export { app, onAuthChange, getCurrentUser, signInWithGoogle, signOutUser };
 ```
 
 `auth.js` imports `"firebase/app"`/`"firebase/auth"` as bare specifiers, not full `gstatic.com` URLs. This is deliberate: `src/versions.js` (Task 5) is loaded both by the browser AND directly by `node --test` (it has a plain Node unit test), and Node's default ES module loader cannot resolve a bare `https://` URL import without an experimental flag this project doesn't want to depend on. Every Firebase-importing file in this plan (`auth.js`, `store.js`, `versions.js`) uses the same bare specifiers; the browser resolves them via an **import map** (Task 6 adds one to `index.html`; every standalone test fixture HTML file needs its own copy, since import maps are per-document) mapping to the pinned `gstatic.com` CDN version, while Node resolves the identical specifiers straight through `node_modules/firebase` (installed in Task 1). One version string, one place (the import map) - not copy-pasted across files.
@@ -465,23 +369,23 @@ Create `tests/e2e/auth.spec.js`:
 
 ```js
 import { test, expect } from "@playwright/test";
-import { mintCustomToken } from "../support/admin.js";
 
-// Real Google Sign-In popups can't be reliably automated in a headless
-// browser (Google's bot detection blocks them) - tests sign in via a
-// service-account-minted custom token instead (tests/support/admin.js,
-// Task 1), Firebase's own documented pattern for testing Auth-gated apps
-// without emulators. A tiny debug page at
-// tests/e2e/fixtures/auth-harness.html exposes signInWithToken() to
-// Playwright via a global. The real "click Sign in with Google, see a
-// popup" interaction is verified manually once (see this plan's Final
-// Verification), never by this automated suite.
-test("signing in with a custom token exposes the user's email via getCurrentUser()", async ({
+// The Auth emulator's REST API can pre-seed a user and hand back a custom
+// token an app would normally get via a real Google popup - avoiding the
+// need to drive an actual Google OAuth consent screen in CI. This project's
+// pages don't have that helper wired up yet (that's what this test drives
+// into existence): a tiny debug page at tests/e2e/fixtures/auth-harness.html
+// that imports src/auth.js and exposes signInWithGoogle()/getCurrentUser()
+// to Playwright via page.evaluate, using the emulator's documented
+// "auto-accept" behavior for signInWithPopup when connectAuthEmulator is
+// active (the emulator never shows a real Google screen; it immediately
+// resolves with a deterministic fake account you select via the emulator UI
+// or a pre-configured test account).
+test("signing in with an allowed email exposes the user's email via getCurrentUser()", async ({
   page,
 }) => {
-  const token = await mintCustomToken("hod@example.com");
-  await page.goto("/tests/e2e/fixtures/auth-harness.html?test=1");
-  await page.evaluate((t) => window.__signInWithToken(t), token);
+  await page.goto("/tests/e2e/fixtures/auth-harness.html?emulators=1");
+  await page.click("#trigger-sign-in");
   await expect(page.locator("#current-email")).toHaveText("hod@example.com", {
     timeout: 10000,
   });
@@ -507,16 +411,19 @@ Create `tests/e2e/fixtures/auth-harness.html`:
     </script>
   </head>
   <body>
+    <button id="trigger-sign-in">Sign in</button>
     <span id="current-email"></span>
     <script type="module">
-      import { onAuthChange, signInWithToken } from "../../../src/auth.js";
+      import { onAuthChange, signInWithGoogle } from "../../../src/auth.js";
 
       onAuthChange((user) => {
         document.getElementById("current-email").textContent = user
           ? user.email
           : "";
       });
-      window.__signInWithToken = signInWithToken;
+      document
+        .getElementById("trigger-sign-in")
+        .addEventListener("click", () => signInWithGoogle());
     </script>
   </body>
 </html>
@@ -524,21 +431,25 @@ Create `tests/e2e/fixtures/auth-harness.html`:
 
 (Every Firebase-importing bare specifier used anywhere in this plan is mapped here, even though this fixture only directly needs `firebase/auth`/`firebase/app` - `src/auth.js` itself only pulls in those two, so the `firebase/firestore` entry is harmless but unused in this particular fixture. Copy this exact import map into every other standalone test fixture HTML file this plan creates - Task 4's `store-harness.html` - so each resolves independently of `index.html`.)
 
+The Auth emulator intercepts `signInWithPopup` and, in headless/automated contexts, auto-resolves it against a deterministic test account rather than opening a real Google consent screen - Playwright drives the click, the emulator handles the rest with no external network call.
+
 - [ ] **Step 5: Run it to verify it fails**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test tests/e2e/auth.spec.js` (needs `npx http-server -p 8080 -c-1 &` running first, per `playwright.config.js`'s existing `webServer` config)
+Run: `npm run emulators &` (wait ~5s), then `npx playwright test tests/e2e/auth.spec.js`
 Expected: FAIL before `src/auth.js`/`src/firebase-config.js` exist (module not found), or the sign-in never resolves if those files aren't yet in place.
 
 - [ ] **Step 6: Confirm it passes with the files from Steps 1-2 in place**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test tests/e2e/auth.spec.js`
+Run: `npx playwright test tests/e2e/auth.spec.js` (emulators still running from Step 5)
 Expected: PASS - `#current-email` shows `hod@example.com`.
+
+Stop the emulator process afterward.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/firebase-config.js src/auth.js tests/e2e/auth.spec.js tests/e2e/fixtures/auth-harness.html
-git commit -m "feat: add Google Sign-In via Firebase Auth, with custom-token sign-in for tests"
+git commit -m "feat: add Google Sign-In via Firebase Auth"
 ```
 
 ---
@@ -553,7 +464,7 @@ git commit -m "feat: add Google Sign-In via Firebase Auth, with custom-token sig
 
 **Interfaces:**
 
-- Consumes: `app` and `getCurrentUser` from `src/auth.js` (Task 3).
+- Consumes: `app` and `getCurrentUser` from `src/auth.js` (Task 3); `useEmulators` from `src/firebase-config.js` (Task 3).
 - Produces (Task 5, 7 import these; this REPLACES store.js's old `replaceData`/`isDirty`/`clearDirty` exports, which are removed - no other file used them outside `src/ui.js`, updated in Task 7):
   - `initStore()` - `async`, fetches `deployments/main` once, populates the in-memory cache. Must be called (and awaited) once, after sign-in, before rendering.
   - `getData()` - unchanged signature: returns the current in-memory data object.
@@ -569,15 +480,13 @@ Create `tests/e2e/store.spec.js`:
 
 ```js
 import { test, expect } from "@playwright/test";
-import { mintCustomToken } from "../support/admin.js";
 
 test("setData writes to Firestore and a second page load sees it", async ({
   page,
   context,
 }) => {
-  const token = await mintCustomToken("hod@example.com");
-  await page.goto("/index.html?test=1");
-  await signInAsHod(page, token);
+  await page.goto("/index.html?emulators=1");
+  await signInAsHod(page);
   await page.click('[data-tab="subjects"]');
   await page.click("#btn-add-subject");
   await page.fill(
@@ -586,8 +495,8 @@ test("setData writes to Firestore and a second page load sees it", async ({
   );
 
   const page2 = await context.newPage();
-  await page2.goto("/index.html?test=1");
-  await signInAsHod(page2, token);
+  await page2.goto("/index.html?emulators=1");
+  await signInAsHod(page2);
   await expect(
     page2.locator(
       '#table-subjects tbody tr:last-child input[data-field="name"]',
@@ -598,18 +507,17 @@ test("setData writes to Firestore and a second page load sees it", async ({
 test("a stale write is blocked with a plain-language conflict message", async ({
   context,
 }) => {
-  const token = await mintCustomToken("hod@example.com");
   const pageA = await context.newPage();
   const pageB = await context.newPage();
-  await pageA.goto("/index.html?test=1");
-  await pageB.goto("/index.html?test=1");
-  await signInAsHod(pageA, token);
-  await signInAsHod(pageB, token);
+  await pageA.goto("/index.html?emulators=1");
+  await pageB.goto("/index.html?emulators=1");
+  await signInAsHod(pageA);
+  await signInAsHod(pageB);
 
   // Both load the same starting state, then A saves first.
   await pageA.click('[data-tab="subjects"]');
   await pageA.click("#btn-add-subject");
-  await expect(pageA.locator("#subjects-status")).not.toContainText("Saving");
+  await expect(page.locator("#subjects-status")).not.toContainText("Saving");
 
   // B, still holding the pre-A state, now also writes.
   await pageB.click('[data-tab="subjects"]');
@@ -621,24 +529,16 @@ test("a stale write is blocked with a plain-language conflict message", async ({
   );
 });
 
-// Signs in via a pre-minted custom token through the test-only
-// window.__signInWithToken hook (src/ui.js, Task 7 - exposed only when
-// useTestProject is true) instead of clicking the real Google Sign-In
-// button, which would open a popup no automated browser can reliably
-// drive. See tests/e2e/auth.spec.js for the equivalent narrower test.
-async function signInAsHod(page, token) {
-  await page.waitForFunction(
-    () => typeof window.__signInWithToken === "function",
-  );
-  await page.evaluate((t) => window.__signInWithToken(t), token);
+async function signInAsHod(page) {
+  await page.click("#sign-in-button");
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx http-server -p 8080 -c-1 &` then `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test tests/e2e/store.spec.js`
-Expected: FAIL - `store.js` still reads/writes localStorage, `#save-status`/`#app-shell`/`window.__signInWithToken` don't exist yet (those land in Tasks 6-7).
+Run: `npm run emulators &` (wait ~5s), then `npx http-server -p 8080 -c-1 &`, then `npx playwright test tests/e2e/store.spec.js`
+Expected: FAIL - `store.js` still reads/writes localStorage, `#save-status`/`#app-shell`/`#sign-in-button` don't exist yet (those land in Tasks 6-7).
 
 (This test can only fully pass once Tasks 6 and 7 also land - that's expected for a data-layer task whose consumers aren't wired yet. Steps 3-4 below implement `store.js` itself and confirm its logic works via a narrower check; the full green run happens at the end of Task 7's completion, which this plan's final verification re-confirms.)
 
@@ -658,10 +558,15 @@ import {
   getDoc,
   runTransaction,
   serverTimestamp,
+  connectFirestoreEmulator,
 } from "firebase/firestore";
 import { app, getCurrentUser } from "../auth.js";
+import { useEmulators } from "../firebase-config.js";
 
 const db = getFirestore(app);
+if (useEmulators) {
+  connectFirestoreEmulator(db, "127.0.0.1", 8081);
+}
 
 function mainDocRef() {
   return doc(db, "deployments", "main");
@@ -827,7 +732,7 @@ Create `tests/e2e/fixtures/store-harness.html`:
     <pre id="data-out"></pre>
     <span id="status-out"></span>
     <script type="module">
-      import { signInWithToken } from "../../../src/auth.js";
+      import { signInWithGoogle } from "../../../src/auth.js";
       import {
         initStore,
         getData,
@@ -841,9 +746,8 @@ Create `tests/e2e/fixtures/store-harness.html`:
           : status;
       });
 
-      window.__signInWithToken = signInWithToken;
-
       document.getElementById("load").addEventListener("click", async () => {
+        await signInWithGoogle();
         await initStore();
         document.getElementById("data-out").textContent =
           JSON.stringify(getData());
@@ -866,9 +770,7 @@ Add to `tests/e2e/store.spec.js`:
 test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
   page,
 }) => {
-  const token = await mintCustomToken("hod@example.com");
-  await page.goto("/tests/e2e/fixtures/store-harness.html?test=1");
-  await page.evaluate((t) => window.__signInWithToken(t), token);
+  await page.goto("/tests/e2e/fixtures/store-harness.html?emulators=1");
   await page.click("#load");
   await expect(page.locator("#data-out")).not.toHaveText("", {
     timeout: 10000,
@@ -880,9 +782,9 @@ test("initStore() loads the current doc and setData() writes it back with a 'sav
 });
 ```
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx http-server -p 8080 -c-1 &` then `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test tests/e2e/store.spec.js -g "initStore"`
+Run: `npm run emulators &` (wait ~5s), then `npx http-server -p 8080 -c-1 &`, then `npx playwright test tests/e2e/store.spec.js -g "initStore"`
 Expected: FAIL before `store.js` is rewritten (Step 3) - confirm this ran RED before Step 3's code existed by checking it fails now for the right reason (`initStore is not a function` or similar), then re-run after Step 3's rewrite.
-Expected after Step 3: PASS. Stop the background static-file-server process afterward.
+Expected after Step 3: PASS. Stop both background processes afterward.
 
 - [ ] **Step 5: Commit**
 
@@ -898,11 +800,11 @@ git commit -m "feat: rewrite store.js to sync through Firestore with an overwrit
 **Files:**
 
 - Modify: `src/versions.js` (signature changes - see Interfaces)
-- Move: `tests/unit/versions.test.js` → `tests/integration/versions.test.js` (needs a real Firestore connection now - moves out of the fast/offline `tests/unit/` suite, matching this project's "test the real thing" philosophy already used for the HiGHS solver, just against the real test project instead of a mock)
+- Test: `tests/unit/versions.test.js` (existing file, needs a real Firestore connection now - moves to using the emulator, matching this project's "test the real thing" philosophy already used for the HiGHS solver)
 
 **Interfaces:**
 
-- Consumes: `getFirestoreDb()` from `src/ui/store.js` (Task 4); `mintCustomToken` from `tests/support/admin.js` (Task 1, test-only).
+- Consumes: `getFirestoreDb()` from `src/ui/store.js` (Task 4).
 - Produces (Task 7 imports these; signatures changed from the pre-Firestore version):
   - `saveVersion(db, name, assignments, layerSettings, timestamp?)` - `async`, returns the new version's Firestore doc id (`string`).
   - `listVersions(db, currentAssignments)` - `async`, returns `{id, name, timestamp, changedCount}[]`, newest first. `changedCount` is `compareAssignments(version.assignments, currentAssignments).length`, computed once per version so the UI doesn't need a second round trip per row.
@@ -911,30 +813,26 @@ git commit -m "feat: rewrite store.js to sync through Firestore with an overwrit
 
 - [ ] **Step 1: Write the failing tests**
 
-Move `tests/unit/versions.test.js` to `tests/integration/versions.test.js` (read the existing file first for its current test names/style, then adapt each case to the new async signatures using a real connection to the test project):
+Replace `tests/unit/versions.test.js` (read the existing file first for its current test names/style, then adapt each case to the new async signatures using a real emulator connection):
 
 ```js
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth, signInWithCustomToken } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import {
   saveVersion,
   listVersions,
   restoreVersion,
   compareAssignments,
 } from "../../src/versions.js";
-import { mintCustomToken } from "../support/admin.js";
-import { testFirebaseConfig } from "./test-firebase-config.js";
 
-const app = initializeApp(testFirebaseConfig, "versions-test");
+const app = initializeApp(
+  { projectId: "demo-my-deployment-buddy" },
+  "versions-test",
+);
 const db = getFirestore(app);
-
-test.before(async () => {
-  const token = await mintCustomToken("hod@example.com");
-  await signInWithCustomToken(getAuth(app), token);
-});
+connectFirestoreEmulator(db, "127.0.0.1", 8081);
 
 test("saveVersion() then listVersions() returns it with the right changedCount", async () => {
   const assignments = [{ groupId: "g1", teacherId: "t1", locked: false }];
@@ -996,7 +894,7 @@ test("compareAssignments() reports a group whose teacher changed", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json node --test tests/integration/versions.test.js`
+Run: `npm run emulators &` (wait ~5s), then `node --test tests/unit/versions.test.js`
 Expected: FAIL - `versions.js` still exports the old pure-array-based signatures.
 
 - [ ] **Step 3: Rewrite `src/versions.js`**
@@ -1125,14 +1023,13 @@ export { saveVersion, listVersions, restoreVersion, compareAssignments };
 
 - [ ] **Step 4: Run it to verify it passes**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json node --test tests/integration/versions.test.js`
-Expected: PASS, all tests.
+Run: `node --test tests/unit/versions.test.js` (emulator still running)
+Expected: PASS, all tests. Stop the emulator process afterward.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git rm tests/unit/versions.test.js
-git add src/versions.js tests/integration/versions.test.js
+git add src/versions.js tests/unit/versions.test.js
 git commit -m "feat: move saved versions into a Firestore subcollection"
 ```
 
@@ -1390,13 +1287,7 @@ import {
   onSaveStatusChange,
   getFirestoreDb,
 } from "./ui/store.js";
-import {
-  onAuthChange,
-  signInWithGoogle,
-  signInWithToken,
-  signOutUser,
-} from "./auth.js";
-import { useTestProject } from "./firebase-config.js";
+import { onAuthChange, signInWithGoogle, signOutUser } from "./auth.js";
 ```
 
 - [ ] **Step 2: Update `onSolve()` for the new `saveVersion()` signature**
@@ -1722,15 +1613,6 @@ function boot() {
     .getElementById("sign-out-button")
     .addEventListener("click", () => signOutUser());
 
-  // Test-only escape hatch: a real Google popup can't be reliably automated
-  // in a headless browser, so the e2e suite signs in via a service-account-
-  // minted custom token instead (tests/support/admin.js) when running
-  // against the separate test project. Guarded behind useTestProject so it
-  // never exists when a real HOD opens the real production app.
-  if (useTestProject) {
-    window.__signInWithToken = signInWithToken;
-  }
-
   onAuthChange((user) => {
     if (user) onSignedIn(user);
     else onSignedOut();
@@ -1800,13 +1682,14 @@ new_string:
 Run:
 
 ```bash
-export FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json
+npm run emulators &
+sleep 5
 npx http-server -p 8080 -c-1 &
 sleep 1
 npx playwright test tests/e2e/store.spec.js tests/e2e/auth.spec.js
 ```
 
-Expected: PASS, all tests from Tasks 3 and 4's e2e specs now fully green (Task 4's `store.spec.js` was left red at the end of Task 4 specifically because it needed this task's sign-in UI/wiring, plus the `window.__signInWithToken` hook this task's boot sequence adds). Stop the background static-file-server process afterward.
+Expected: PASS, all tests from Tasks 3 and 4's e2e specs now fully green (Task 4's `store.spec.js` was left red at the end of Task 4 specifically because it needed this task's sign-in UI/wiring). Stop both background processes afterward.
 
 - [ ] **Step 7: Commit**
 
@@ -1861,45 +1744,67 @@ git commit -m "chore: remove localStorage persistence from data.js (Firestore is
 
 ---
 
-### Task 9: Point e2e tests at the real test project; add the Review Focus tests
+### Task 9: Point e2e tests at the emulator suite; add the Review Focus tests
 
 **Files:**
 
-- Modify: `playwright.config.js` (no structural change needed - still a single `webServer` running the static file server; just documents the new env-var requirement)
+- Modify: `playwright.config.js`
 - Modify: `tests/e2e/deployment.spec.js` (add a sign-in step to every existing flow; add 2 new tests)
 
 **Interfaces:**
 
-- Consumes: everything from Tasks 1-8; `mintCustomToken` from `tests/support/admin.js` (Task 1).
+- Consumes: everything from Tasks 1-7.
 - Produces: nothing (final integration task before docs).
 
-- [ ] **Step 1: Document the env-var requirement in `playwright.config.js`**
+- [ ] **Step 1: Add the emulator suite as a second `webServer`**
 
-`playwright.config.js` needs no structural change (still one `webServer` entry for the static file server - there's no emulator to start alongside it). Add a short comment above the `webServer` block noting the new prerequisite:
+Replace `playwright.config.js`:
 
 ```js
-old_string:
+old_string: import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests/e2e",
+  fullyParallel: false, // Small local suite; keep it simple and deterministic.
+  reporter: "list",
+  use: {
+    baseURL: "http://localhost:8080",
+  },
   webServer: {
     command: "npx http-server -p 8080 -c-1 --silent",
     url: "http://localhost:8080",
     reuseExistingServer: !process.env.CI,
     timeout: 30 * 1000,
   },
+});
 ```
 
 ```js
-new_string:
-  // Tests that sign in (most of this suite) also need FIREBASE_TEST_SERVICE_ACCOUNT
-  // set in the environment before running `npx playwright test` - see
-  // tests/support/admin.js and docs/superpowers/plans/2026-09-29-firestore-sync.md
-  // Task 1's prerequisite note. No emulator process is started here; tests
-  // run against the real, separate test Firebase project.
-  webServer: {
-    command: "npx http-server -p 8080 -c-1 --silent",
-    url: "http://localhost:8080",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30 * 1000,
+new_string: import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests/e2e",
+  fullyParallel: false, // Small local suite; keep it simple and deterministic.
+  reporter: "list",
+  use: {
+    baseURL: "http://localhost:8080",
   },
+  webServer: [
+    {
+      command: "npx http-server -p 8080 -c-1 --silent",
+      url: "http://localhost:8080",
+      reuseExistingServer: !process.env.CI,
+      timeout: 30 * 1000,
+    },
+    {
+      command:
+        "npx firebase emulators:start --project demo-my-deployment-buddy",
+      url: "http://127.0.0.1:4000",
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+  ],
+});
 ```
 
 - [ ] **Step 2: Add a shared sign-in helper and use it in every existing test**
@@ -1907,15 +1812,9 @@ new_string:
 Read `tests/e2e/deployment.spec.js` fully first (it already has a pattern for shared setup, per its existing structure) and add near the top, alongside any existing helpers:
 
 ```js
-import { mintCustomToken } from "../support/admin.js";
-
 async function signInAsHod(page) {
-  const token = await mintCustomToken("hod@example.com");
-  await page.goto("/index.html?test=1");
-  await page.waitForFunction(
-    () => typeof window.__signInWithToken === "function",
-  );
-  await page.evaluate((t) => window.__signInWithToken(t), token);
+  await page.goto("/index.html?emulators=1");
+  await page.click("#sign-in-button");
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 ```
@@ -1930,16 +1829,11 @@ Add to `tests/e2e/deployment.spec.js`:
 test("signing in with an email not on the allowlist is rejected with a clear message, not a blank app", async ({
   page,
 }) => {
-  // firebase-admin can mint a token for ANY email, allowlisted or not -
-  // rules enforcement happens at the Firestore layer regardless of how
-  // sign-in happened, so this genuinely tests the same rejection path a
-  // real non-allowlisted Google account would hit.
-  const token = await mintCustomToken("stranger@example.com");
-  await page.goto("/index.html?test=1");
-  await page.waitForFunction(
-    () => typeof window.__signInWithToken === "function",
-  );
-  await page.evaluate((t) => window.__signInWithToken(t), token);
+  await page.goto("/index.html?emulators=1");
+  // The Auth emulator's default test account for this harness is
+  // hod@example.com (matching firestore.rules); force a different,
+  // non-allowlisted identity via the same sign-in flow's account picker.
+  await page.click("#sign-in-button");
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
   // Signed in, but Firestore denies every read/write for this identity -
   // initStore() must surface that as a message, not a silent blank page.
@@ -1981,19 +1875,19 @@ test("reloading after a solve still never triggers a re-solve, now that data loa
 
 - [ ] **Step 5: Run the two new tests from Steps 3-4**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test -g "not on the allowlist|never triggers a re-solve"`
+Run: `npx playwright test -g "not on the allowlist|never triggers a re-solve"`
 Expected: both the behaviors under test were already built in Tasks 4 and 7 (the transaction's rejection surfaces through `initStore()`'s existing catch block; the reload path already re-fetches from Firestore with no solver call) - so these tests are expected to PASS immediately, confirming those two Review Focus items as real, working regression guards rather than untested claims. If either fails, that's a genuine gap in Tasks 4/7 - use systematic debugging to find and fix it there (not by weakening the test).
 
 - [ ] **Step 6: Confirm the whole suite passes**
 
-Run: `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test`
+Run: `npx playwright test`
 Expected: PASS, every test in `tests/e2e/deployment.spec.js`, `tests/e2e/auth.spec.js`, and `tests/e2e/store.spec.js`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add playwright.config.js tests/e2e/deployment.spec.js
-git commit -m "test: run e2e suite against the real test Firebase project; add allowlist and reload-never-resolves regression tests"
+git commit -m "test: run e2e suite against the Firebase emulator suite; add allowlist and reload-never-resolves regression tests"
 ```
 
 ---
@@ -2087,7 +1981,7 @@ git commit -m "docs: update CLAUDE.md non-negotiables for Firestore-backed share
 
 After Task 10:
 
-1. Run `npm test` (the `tests/unit/**` glob) - expect all tests passing, 0 failures, no network access needed - this stays exactly as fast/offline as before this plan.
-2. Run `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npm run test:integration` - expect all rules-test and versions-test cases passing against the real test Firebase project.
-3. Run `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx http-server -p 8080 -c-1 &`, then `FIREBASE_TEST_SERVICE_ACCOUNT=/path/to/your/downloaded-key.json npx playwright test` - expect every e2e test passing (deployment flows + auth + store + the two new Review Focus tests). Stop the background process.
-4. Manually (the user, not an agent): create a real PRODUCTION Firebase project (separate from the test project used throughout this plan), replace `src/firebase-config.js`'s `productionConfig` placeholders and `firestore.rules`'s two placeholder emails with real values, paste the rules into that project's Firebase console, and open the deployed GitHub Pages URL without `?test=1` to confirm real Google Sign-In and Firestore work end-to-end against production. This step needs the user's own Google account emails and cannot be scripted by an agent.
+1. Run `npm test` - expect all unit tests passing, 0 failures.
+2. Run `npm run test:rules` - expect all 4 security-rules tests passing.
+3. Run `npm run emulators &`, wait, then `npx http-server -p 8080 -c-1 &`, then `npx playwright test` - expect every e2e test passing (deployment flows + auth + store + the two new Review Focus tests). Stop both background processes.
+4. Manually (the user, not an agent): create a real Firebase project, replace the placeholder values in `src/firebase-config.js` and the two placeholder emails in `firestore.rules`, paste the rules into the Firebase console, and open the deployed GitHub Pages URL without `?emulators=1` to confirm real Google Sign-In and Firestore work end-to-end. This step needs the user's own Google account emails and cannot be scripted by an agent.
