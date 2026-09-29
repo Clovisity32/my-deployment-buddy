@@ -1,311 +1,768 @@
 {
+  "roles": [
+    {
+      "id": "hod",
+      "name": "HOD",
+      "maxPeriods": 36
+    },
+    {
+      "id": "sh_st",
+      "name": "SH/ST",
+      "maxPeriods": 50
+    },
+    {
+      "id": "teacher",
+      "name": "Teacher",
+      "maxPeriods": 60
+    },
+    {
+      "id": "others",
+      "name": "Others",
+      "maxPeriods": null
+    }
+  ],
+  "subjects": [
+    {
+      "id": "G1_LSS",
+      "name": "G1 LSS",
+      "discipline": "LSS",
+      "stream": "G1",
+      "periods": 12,
+      "levels": [1, 2]
+    },
+    {
+      "id": "G2_LSS",
+      "name": "G2 LSS",
+      "discipline": "LSS",
+      "stream": "G2",
+      "periods": 12,
+      "levels": [1, 2]
+    },
+    {
+      "id": "G3_LSS",
+      "name": "G3 LSS",
+      "discipline": "LSS",
+      "stream": "G3",
+      "periods": 12,
+      "levels": [1, 2]
+    },
+    {
+      "id": "G1_SCI",
+      "name": "G1 SCI",
+      "discipline": "SCI",
+      "stream": "G1",
+      "periods": 10,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G2_SCI_PHY",
+      "name": "G2 SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G2",
+      "periods": 6,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G3_SCI_PHY",
+      "name": "G3 SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G3",
+      "periods": 6,
+      "levels": [3, 4, 5]
+    },
+    {
+      "id": "G3_PURE_PHY",
+      "name": "G3 PURE_PHY",
+      "discipline": "PHY",
+      "stream": "PURE",
+      "periods": 10,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G2_SCI_BIO",
+      "name": "G2 SCI_BIO",
+      "discipline": "BIO",
+      "stream": "G2",
+      "periods": 6,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G3_SCI_BIO",
+      "name": "G3 SCI_BIO",
+      "discipline": "BIO",
+      "stream": "G3",
+      "periods": 6,
+      "levels": [3, 4, 5]
+    },
+    {
+      "id": "G3_PURE_BIO",
+      "name": "G3 PURE_BIO",
+      "discipline": "BIO",
+      "stream": "PURE",
+      "periods": 10,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G2_SCI_CHEM",
+      "name": "G2 SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G2",
+      "periods": 6,
+      "levels": [3, 4]
+    },
+    {
+      "id": "G3_SCI_CHEM",
+      "name": "G3 SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G3",
+      "periods": 6,
+      "levels": [3, 4, 5]
+    },
+    {
+      "id": "G3_PURE_CHEM",
+      "name": "G3 PURE_CHEM",
+      "discipline": "CHEM",
+      "stream": "PURE",
+      "periods": 10,
+      "levels": [3, 4]
+    }
+  ],
+  "classes": [
+    {
+      "id": "101",
+      "level": 1,
+      "name": "Curiosity",
+      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"]
+    },
+    {
+      "id": "102",
+      "level": 1,
+      "name": "Adaptability",
+      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"]
+    },
+    {
+      "id": "103",
+      "level": 1,
+      "name": "Respect",
+      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"]
+    },
+    {
+      "id": "104",
+      "level": 1,
+      "name": "Responsibility",
+      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"]
+    },
+    {
+      "id": "201",
+      "level": 2,
+      "name": "Curiosity",
+      "subjectIds": ["G1_LSS", "G2_LSS"]
+    },
+    {
+      "id": "202",
+      "level": 2,
+      "name": "Adaptability",
+      "subjectIds": ["G1_LSS", "G2_LSS"]
+    },
+    {
+      "id": "203",
+      "level": 2,
+      "name": "Respect",
+      "subjectIds": ["G1_LSS", "G2_LSS"]
+    },
+    {
+      "id": "301",
+      "level": 3,
+      "name": "Curiosity",
+      "subjectIds": ["G1_SCI"]
+    },
+    {
+      "id": "302",
+      "level": 3,
+      "name": "Adaptability",
+      "subjectIds": ["G2_SCI_PHY", "G2_SCI_CHEM"]
+    },
+    {
+      "id": "303",
+      "level": 3,
+      "name": "Respect",
+      "subjectIds": ["G3_PURE_PHY", "G3_PURE_CHEM"]
+    },
+    {
+      "id": "401",
+      "level": 4,
+      "name": "Curiosity",
+      "subjectIds": ["G2_SCI_CHEM", "G2_SCI_PHY"]
+    },
+    {
+      "id": "402",
+      "level": 4,
+      "name": "Adaptability",
+      "subjectIds": ["G2_SCI_CHEM", "G2_SCI_PHY"]
+    },
+    {
+      "id": "403",
+      "level": 4,
+      "name": "Respect",
+      "subjectIds": ["G3_SCI_PHY", "G3_SCI_BIO"]
+    },
+    {
+      "id": "404",
+      "level": 4,
+      "name": "Responsibility",
+      "subjectIds": ["G3_SCI_PHY", "G3_SCI_BIO"]
+    },
+    {
+      "id": "405",
+      "level": 4,
+      "name": "Resilience",
+      "subjectIds": ["G3_SCI_PHY", "G3_SCI_BIO"]
+    },
+    {
+      "id": "501",
+      "level": 5,
+      "name": "Flourish",
+      "subjectIds": ["G3_SCI_PHY", "G3_SCI_BIO", "G3_SCI_CHEM"]
+    }
+  ],
+  "bands": [
+    {
+      "id": "b-1",
+      "name": "1-Band",
+      "classIds": ["101", "102", "103", "104"],
+      "subjects": [
+        {
+          "subjectId": "G1_LSS",
+          "groups": 1
+        },
+        {
+          "subjectId": "G2_LSS",
+          "groups": 1
+        },
+        {
+          "subjectId": "G3_LSS",
+          "groups": 1
+        }
+      ],
+      "note": "Ability-streamed LSS lessons, whole level-1 cohort"
+    },
+    {
+      "id": "b-2",
+      "name": "2-Band",
+      "classIds": ["201", "202", "203"],
+      "subjects": [
+        {
+          "subjectId": "G1_LSS",
+          "groups": 1
+        },
+        {
+          "subjectId": "G2_LSS",
+          "groups": 1
+        }
+      ],
+      "note": "Ability-streamed LSS lessons, whole level-2 cohort"
+    },
+    {
+      "id": "b-401-402",
+      "name": "401 & 402",
+      "classIds": ["401", "402"],
+      "subjects": [
+        {
+          "subjectId": "G2_SCI_CHEM",
+          "groups": 1
+        },
+        {
+          "subjectId": "G2_SCI_PHY",
+          "groups": 1
+        }
+      ],
+      "note": "Banded with 402/401"
+    },
+    {
+      "id": "b-403-405",
+      "name": "403 - 405",
+      "classIds": ["403", "404", "405"],
+      "subjects": [
+        {
+          "subjectId": "G3_SCI_PHY",
+          "groups": 3
+        },
+        {
+          "subjectId": "G3_SCI_BIO",
+          "groups": 1
+        }
+      ],
+      "note": "Banded across 403 - 405"
+    }
+  ],
+  "groupOverrides": {},
+  "customGroups": [
+    {
+      "id": "g-custom-enrich",
+      "level": 4,
+      "block": "Chem",
+      "label": "Enrichment: Chem Research Club",
+      "periods": 4,
+      "band": null,
+      "teachersNeeded": 1,
+      "category": "ENRICH",
+      "note": "One-off co-curricular group, manually added (not part of the generated pattern)",
+      "subjectId": "G3_SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G3",
+      "classIds": [],
+      "bandId": null
+    }
+  ],
   "teachers": [
     {
       "id": "t1",
       "name": "Amy Lim",
-      "maxPeriods": 30,
-      "subjects": ["LSS", "Chem"]
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": ["G1_LSS", "G2_LSS", "G3_LSS"]
     },
     {
       "id": "t2",
       "name": "Ben Ong",
-      "maxPeriods": 30,
-      "subjects": ["LSS", "Phy"]
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": ["G2_LSS", "G3_LSS", "G1_SCI"]
     },
     {
       "id": "t3",
       "name": "Cheryl Tan",
-      "maxPeriods": 28,
-      "subjects": ["Chem"]
+      "roleId": "sh_st",
+      "capOverride": null,
+      "qualifications": ["G1_SCI", "G2_SCI_PHY", "G2_SCI_CHEM"]
     },
     {
       "id": "t4",
       "name": "Danish Rahman",
-      "maxPeriods": 30,
-      "subjects": ["Chem", "Bio"]
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": [
+        "G2_SCI_PHY",
+        "G2_SCI_CHEM",
+        "G3_PURE_PHY",
+        "G3_PURE_CHEM"
+      ]
     },
-    { "id": "t5", "name": "Elaine Koh", "maxPeriods": 30, "subjects": ["Phy"] },
+    {
+      "id": "t5",
+      "name": "Elaine Koh",
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": ["G3_SCI_PHY", "G3_SCI_BIO"]
+    },
     {
       "id": "t6",
       "name": "Farid Hassan",
-      "maxPeriods": 26,
-      "subjects": ["Phy", "Bio"]
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": ["G3_SCI_PHY", "G3_SCI_CHEM"]
     },
-    { "id": "t7", "name": "Grace Wee", "maxPeriods": 30, "subjects": ["Bio"] },
+    {
+      "id": "t7",
+      "name": "Grace Wee",
+      "roleId": "hod",
+      "capOverride": null,
+      "qualifications": ["G3_PURE_PHY", "G3_PURE_CHEM"]
+    },
     {
       "id": "t8",
       "name": "Haziq Yusof",
-      "maxPeriods": 30,
-      "subjects": ["LSS", "Chem", "Phy"]
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": ["G3_SCI_PHY", "G3_SCI_BIO", "G3_SCI_CHEM"]
     },
     {
       "id": "t9",
+      "name": "Irfan Salleh",
+      "roleId": "others",
+      "capOverride": 20,
+      "qualifications": ["G1_LSS"]
+    },
+    {
+      "id": "t10",
       "name": "New Teacher",
-      "maxPeriods": 30,
-      "subjects": ["Chem", "Phy", "Bio", "LSS"],
+      "roleId": "teacher",
+      "capOverride": null,
+      "qualifications": [
+        "G1_LSS",
+        "G2_LSS",
+        "G3_LSS",
+        "G1_SCI",
+        "G2_SCI_PHY",
+        "G2_SCI_CHEM",
+        "G3_PURE_PHY",
+        "G3_PURE_CHEM",
+        "G3_SCI_PHY",
+        "G3_SCI_BIO",
+        "G3_SCI_CHEM"
+      ],
       "isPlaceholder": true
     }
   ],
   "groups": [
     {
-      "id": "g-1g1a",
-      "level": 1,
-      "block": "LSS",
-      "label": "1G1A SCI",
-      "periods": 5,
+      "id": "g_G1_SCI_301",
+      "level": 3,
+      "block": "SCI",
+      "label": "301 G1 SCI",
+      "periods": 10,
       "band": null,
       "teachersNeeded": 1,
       "category": "G1",
-      "note": ""
+      "note": "",
+      "subjectId": "G1_SCI",
+      "discipline": "SCI",
+      "stream": "G1",
+      "classIds": ["301"],
+      "bandId": null
     },
     {
-      "id": "g-1g2a",
-      "level": 1,
-      "block": "LSS",
-      "label": "1G2A SCI",
-      "periods": 5,
+      "id": "g_G2_SCI_PHY_302",
+      "level": 3,
+      "block": "Phy",
+      "label": "302 G2 SCI_PHY",
+      "periods": 6,
       "band": null,
       "teachersNeeded": 1,
       "category": "G2",
-      "note": ""
+      "note": "",
+      "subjectId": "G2_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G2",
+      "classIds": ["302"],
+      "bandId": null
     },
     {
-      "id": "g-1g3a",
-      "level": 1,
-      "block": "LSS",
-      "label": "1G3A SCI",
-      "periods": 5,
+      "id": "g_G2_SCI_CHEM_302",
+      "level": 3,
+      "block": "Chem",
+      "label": "302 G2 SCI_CHEM",
+      "periods": 6,
+      "band": null,
+      "teachersNeeded": 1,
+      "category": "G2",
+      "note": "",
+      "subjectId": "G2_SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G2",
+      "classIds": ["302"],
+      "bandId": null
+    },
+    {
+      "id": "g_G3_PURE_PHY_303",
+      "level": 3,
+      "block": "Phy",
+      "label": "303 G3 PURE_PHY",
+      "periods": 10,
+      "band": null,
+      "teachersNeeded": 1,
+      "category": "PURE",
+      "note": "",
+      "subjectId": "G3_PURE_PHY",
+      "discipline": "PHY",
+      "stream": "PURE",
+      "classIds": ["303"],
+      "bandId": null
+    },
+    {
+      "id": "g_G3_PURE_CHEM_303",
+      "level": 3,
+      "block": "Chem",
+      "label": "303 G3 PURE_CHEM",
+      "periods": 10,
+      "band": null,
+      "teachersNeeded": 1,
+      "category": "PURE",
+      "note": "",
+      "subjectId": "G3_PURE_CHEM",
+      "discipline": "CHEM",
+      "stream": "PURE",
+      "classIds": ["303"],
+      "bandId": null
+    },
+    {
+      "id": "g_G3_SCI_PHY_501",
+      "level": 5,
+      "block": "Phy",
+      "label": "501 G3 SCI_PHY",
+      "periods": 6,
       "band": null,
       "teachersNeeded": 1,
       "category": "G3",
-      "note": ""
-    },
-
-    {
-      "id": "g-2g1a",
-      "level": 2,
-      "block": "LSS",
-      "label": "2G1A SCI",
-      "periods": 5,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "G1",
-      "note": ""
+      "note": "",
+      "subjectId": "G3_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G3",
+      "classIds": ["501"],
+      "bandId": null
     },
     {
-      "id": "g-2g2a",
-      "level": 2,
-      "block": "LSS",
-      "label": "2G2 Grp 1",
-      "periods": 5,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "G2",
-      "note": ""
-    },
-    {
-      "id": "g-2g3a",
-      "level": 2,
-      "block": "LSS",
-      "label": "2G3 Grp 1",
-      "periods": 5,
+      "id": "g_G3_SCI_BIO_501",
+      "level": 5,
+      "block": "Bio",
+      "label": "501 G3 SCI_BIO",
+      "periods": 6,
       "band": null,
       "teachersNeeded": 1,
       "category": "G3",
-      "note": ""
-    },
-
-    {
-      "id": "g-301",
-      "level": 3,
-      "block": "Chem",
-      "label": "301 G1 SCI CHEM",
-      "periods": 4,
-      "band": "B-301-302",
-      "teachersNeeded": 1,
-      "category": "G1",
-      "note": "Banded with 302"
+      "note": "",
+      "subjectId": "G3_SCI_BIO",
+      "discipline": "BIO",
+      "stream": "G3",
+      "classIds": ["501"],
+      "bandId": null
     },
     {
-      "id": "g-302",
-      "level": 3,
+      "id": "g_G3_SCI_CHEM_501",
+      "level": 5,
       "block": "Chem",
-      "label": "302 G2 SCI CHEM",
-      "periods": 4,
-      "band": "B-301-302",
-      "teachersNeeded": 1,
-      "category": "G2",
-      "note": "Banded with 301"
-    },
-    {
-      "id": "g-309-chem",
-      "level": 3,
-      "block": "Chem",
-      "label": "309 PURE CHEM",
-      "periods": 5,
+      "label": "501 G3 SCI_CHEM",
+      "periods": 6,
       "band": null,
       "teachersNeeded": 1,
-      "category": "PURE",
-      "note": ""
-    },
-
-    {
-      "id": "g-302-phy",
-      "level": 3,
-      "block": "Phy",
-      "label": "302 G2 SCI PHY",
-      "periods": 4,
-      "band": "B-301-302",
-      "teachersNeeded": 1,
-      "category": "G2",
-      "note": "Banded with 301"
+      "category": "G3",
+      "note": "",
+      "subjectId": "G3_SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G3",
+      "classIds": ["501"],
+      "bandId": null
     },
     {
-      "id": "g-301-phy",
-      "level": 3,
-      "block": "Phy",
-      "label": "301 G1 SCI PHY",
-      "periods": 4,
-      "band": "B-301-302",
-      "teachersNeeded": 1,
-      "category": "G1",
-      "note": "Banded with 302"
-    },
-
-    {
-      "id": "g-3g2-bio",
-      "level": 3,
-      "block": "Bio",
-      "label": "3G2 SCI BIO",
-      "periods": 4,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "G2",
-      "note": ""
-    },
-    {
-      "id": "g-309-bio",
-      "level": 3,
-      "block": "Bio",
-      "label": "309 PURE BIO",
-      "periods": 5,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "PURE",
-      "note": ""
-    },
-
-    {
-      "id": "g-401-402",
-      "level": 4,
+      "id": "g_G1_LSS_b-1",
+      "level": 1,
       "block": "LSS",
-      "label": "401 & 402 NT SCI",
-      "periods": 5,
-      "band": null,
+      "label": "101 & 102 & 103 & 104 G1 LSS",
+      "periods": 12,
+      "band": "b-1",
       "teachersNeeded": 1,
-      "category": "NT",
-      "note": ""
+      "category": "G1",
+      "note": "Banded: 101, 102, 103, 104",
+      "subjectId": "G1_LSS",
+      "discipline": "LSS",
+      "stream": "G1",
+      "classIds": ["101", "102", "103", "104"],
+      "bandId": "b-1"
     },
     {
-      "id": "g-403",
+      "id": "g_G2_LSS_b-1",
+      "level": 1,
+      "block": "LSS",
+      "label": "101 & 102 & 103 & 104 G2 LSS",
+      "periods": 12,
+      "band": "b-1",
+      "teachersNeeded": 1,
+      "category": "G2",
+      "note": "Banded: 101, 102, 103, 104",
+      "subjectId": "G2_LSS",
+      "discipline": "LSS",
+      "stream": "G2",
+      "classIds": ["101", "102", "103", "104"],
+      "bandId": "b-1"
+    },
+    {
+      "id": "g_G3_LSS_b-1",
+      "level": 1,
+      "block": "LSS",
+      "label": "101 & 102 & 103 & 104 G3 LSS",
+      "periods": 12,
+      "band": "b-1",
+      "teachersNeeded": 1,
+      "category": "G3",
+      "note": "Banded: 101, 102, 103, 104",
+      "subjectId": "G3_LSS",
+      "discipline": "LSS",
+      "stream": "G3",
+      "classIds": ["101", "102", "103", "104"],
+      "bandId": "b-1"
+    },
+    {
+      "id": "g_G1_LSS_b-2",
+      "level": 2,
+      "block": "LSS",
+      "label": "201 & 202 & 203 G1 LSS",
+      "periods": 12,
+      "band": "b-2",
+      "teachersNeeded": 1,
+      "category": "G1",
+      "note": "Banded: 201, 202, 203",
+      "subjectId": "G1_LSS",
+      "discipline": "LSS",
+      "stream": "G1",
+      "classIds": ["201", "202", "203"],
+      "bandId": "b-2"
+    },
+    {
+      "id": "g_G2_LSS_b-2",
+      "level": 2,
+      "block": "LSS",
+      "label": "201 & 202 & 203 G2 LSS",
+      "periods": 12,
+      "band": "b-2",
+      "teachersNeeded": 1,
+      "category": "G2",
+      "note": "Banded: 201, 202, 203",
+      "subjectId": "G2_LSS",
+      "discipline": "LSS",
+      "stream": "G2",
+      "classIds": ["201", "202", "203"],
+      "bandId": "b-2"
+    },
+    {
+      "id": "g_G2_SCI_CHEM_b-401-402",
       "level": 4,
       "block": "Chem",
-      "label": "403 NA SCI CHEM",
-      "periods": 4,
-      "band": "B-403-404",
+      "label": "401 & 402 G2 SCI_CHEM",
+      "periods": 6,
+      "band": "b-401-402",
       "teachersNeeded": 1,
-      "category": "NA",
-      "note": "Banded with 404"
+      "category": "G2",
+      "note": "Banded: 401, 402",
+      "subjectId": "G2_SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G2",
+      "classIds": ["401", "402"],
+      "bandId": "b-401-402"
     },
     {
-      "id": "g-404",
-      "level": 4,
-      "block": "Chem",
-      "label": "404 NA SCI CHEM",
-      "periods": 4,
-      "band": "B-403-404",
-      "teachersNeeded": 1,
-      "category": "NA",
-      "note": "Banded with 403"
-    },
-    {
-      "id": "g-406-exp-chem",
-      "level": 4,
-      "block": "Chem",
-      "label": "406 EXP SCI CHEM",
-      "periods": 4,
-      "band": null,
-      "teachersNeeded": 2,
-      "category": "EXP",
-      "note": "Co-taught"
-    },
-
-    {
-      "id": "g-403-phy",
+      "id": "g_G2_SCI_PHY_b-401-402",
       "level": 4,
       "block": "Phy",
-      "label": "403 NA SCI PHY",
-      "periods": 4,
-      "band": "B-403-404",
+      "label": "401 & 402 G2 SCI_PHY",
+      "periods": 6,
+      "band": "b-401-402",
       "teachersNeeded": 1,
-      "category": "NA",
-      "note": "Banded with 404"
+      "category": "G2",
+      "note": "Banded: 401, 402",
+      "subjectId": "G2_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G2",
+      "classIds": ["401", "402"],
+      "bandId": "b-401-402"
     },
     {
-      "id": "g-404-phy",
+      "id": "g_G3_SCI_PHY_b-403-405_1",
       "level": 4,
       "block": "Phy",
-      "label": "404 NA SCI PHY",
-      "periods": 4,
-      "band": "B-403-404",
+      "label": "403 - 405 G3 SCI_PHY Grp 1",
+      "periods": 6,
+      "band": "b-403-405",
       "teachersNeeded": 1,
-      "category": "NA",
-      "note": "Banded with 403"
+      "category": "G3",
+      "note": "Banded: 403, 404, 405",
+      "subjectId": "G3_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G3",
+      "classIds": ["403", "404", "405"],
+      "bandId": "b-403-405"
     },
-
     {
-      "id": "g-406-bio",
+      "id": "g_G3_SCI_PHY_b-403-405_2",
+      "level": 4,
+      "block": "Phy",
+      "label": "403 - 405 G3 SCI_PHY Grp 2",
+      "periods": 6,
+      "band": "b-403-405",
+      "teachersNeeded": 1,
+      "category": "G3",
+      "note": "Banded: 403, 404, 405",
+      "subjectId": "G3_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G3",
+      "classIds": ["403", "404", "405"],
+      "bandId": "b-403-405"
+    },
+    {
+      "id": "g_G3_SCI_PHY_b-403-405_3",
+      "level": 4,
+      "block": "Phy",
+      "label": "403 - 405 G3 SCI_PHY Grp 3",
+      "periods": 6,
+      "band": "b-403-405",
+      "teachersNeeded": 1,
+      "category": "G3",
+      "note": "Banded: 403, 404, 405",
+      "subjectId": "G3_SCI_PHY",
+      "discipline": "PHY",
+      "stream": "G3",
+      "classIds": ["403", "404", "405"],
+      "bandId": "b-403-405"
+    },
+    {
+      "id": "g_G3_SCI_BIO_b-403-405",
       "level": 4,
       "block": "Bio",
-      "label": "406 & 409 SCI BIO",
+      "label": "403 & 404 & 405 G3 SCI_BIO",
+      "periods": 6,
+      "band": "b-403-405",
+      "teachersNeeded": 1,
+      "category": "G3",
+      "note": "Banded: 403, 404, 405",
+      "subjectId": "G3_SCI_BIO",
+      "discipline": "BIO",
+      "stream": "G3",
+      "classIds": ["403", "404", "405"],
+      "bandId": "b-403-405"
+    },
+    {
+      "id": "g-custom-enrich",
+      "level": 4,
+      "block": "Chem",
+      "label": "Enrichment: Chem Research Club",
       "periods": 4,
       "band": null,
       "teachersNeeded": 1,
-      "category": "EXP",
-      "note": ""
-    },
-
-    {
-      "id": "g-501-chem",
-      "level": 5,
-      "block": "Chem",
-      "label": "501 SCI CHEM",
-      "periods": 5,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "PURE",
-      "note": ""
-    },
-    {
-      "id": "g-501-phy",
-      "level": 5,
-      "block": "Phy",
-      "label": "501 SCI PHY",
-      "periods": 5,
-      "band": null,
-      "teachersNeeded": 1,
-      "category": "PURE",
-      "note": ""
+      "category": "ENRICH",
+      "note": "One-off co-curricular group, manually added (not part of the generated pattern)",
+      "subjectId": "G3_SCI_CHEM",
+      "discipline": "CHEM",
+      "stream": "G3",
+      "classIds": [],
+      "bandId": null
     }
   ],
   "assignments": [],
   "layerSettings": [
-    { "id": "coverage", "enabled": true, "weight": 1 },
-    { "id": "qualification", "enabled": true, "weight": 1 },
-    { "id": "loadCap", "enabled": true, "weight": 1 },
-    { "id": "pin", "enabled": true, "weight": 1 },
-    { "id": "stable", "enabled": true, "weight": 1 },
-    { "id": "placeholder", "enabled": true, "weight": 50 }
+    {
+      "id": "coverage",
+      "enabled": true,
+      "weight": 1
+    },
+    {
+      "id": "qualification",
+      "enabled": true,
+      "weight": 1
+    },
+    {
+      "id": "loadCap",
+      "enabled": true,
+      "weight": 1
+    },
+    {
+      "id": "pin",
+      "enabled": true,
+      "weight": 1
+    },
+    {
+      "id": "bandClash",
+      "enabled": true,
+      "weight": 1
+    },
+    {
+      "id": "stable",
+      "enabled": true,
+      "weight": 5
+    },
+    {
+      "id": "placeholder",
+      "enabled": true,
+      "weight": 50
+    }
   ],
   "versions": []
 }

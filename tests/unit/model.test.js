@@ -5,12 +5,34 @@ import { buildModel, toLpString } from "../../src/model.js";
 // Fixture: 3 teachers, 4 groups (including one co-taught group and one group
 // nobody is qualified for), mirroring the shapes seen in the real deployment
 // sheet (single-subject teachers, a dual-subject teacher, a co-taught group).
+// Schema v2: teachers carry roleId/capOverride/qualifications (subject ids)
+// instead of maxPeriods/subjects; groups carry subjectId instead of relying
+// on `block` for qualification matching (block is kept for display).
 function fixture() {
   return {
+    roles: [{ id: "role1", name: "Role 1", maxPeriods: null }],
     teachers: [
-      { id: "t1", name: "Amy", maxPeriods: 8, subjects: ["Chem"] },
-      { id: "t2", name: "Ben", maxPeriods: 8, subjects: ["Phy"] },
-      { id: "t3", name: "Cara", maxPeriods: 10, subjects: ["Chem", "Phy"] },
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["chem"],
+      },
+      {
+        id: "t2",
+        name: "Ben",
+        roleId: "role1",
+        capOverride: 8,
+        qualifications: ["phy"],
+      },
+      {
+        id: "t3",
+        name: "Cara",
+        roleId: "role1",
+        capOverride: 10,
+        qualifications: ["chem", "phy"],
+      },
     ],
     groups: [
       {
@@ -21,6 +43,7 @@ function fixture() {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "chem",
       },
       {
         id: "g2",
@@ -30,6 +53,7 @@ function fixture() {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "phy",
       },
       {
         id: "g3",
@@ -39,6 +63,7 @@ function fixture() {
         periods: 4,
         band: null,
         teachersNeeded: 2,
+        subjectId: "chem",
       },
       {
         id: "g4",
@@ -48,6 +73,7 @@ function fixture() {
         periods: 4,
         band: null,
         teachersNeeded: 1,
+        subjectId: "bio",
       },
     ],
     assignments: [
@@ -147,8 +173,9 @@ test("placeholder layer only adds objective terms when a placeholder teacher exi
   data.teachers.push({
     id: "t4",
     name: "New Teacher",
-    maxPeriods: 10,
-    subjects: ["Chem"],
+    roleId: "role1",
+    capOverride: 10,
+    qualifications: ["chem"],
     isPlaceholder: true,
   });
   const withPlaceholder = buildModel(data);
