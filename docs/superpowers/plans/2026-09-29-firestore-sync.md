@@ -370,22 +370,33 @@ Create `tests/e2e/auth.spec.js`:
 ```js
 import { test, expect } from "@playwright/test";
 
-// The Auth emulator's REST API can pre-seed a user and hand back a custom
-// token an app would normally get via a real Google popup - avoiding the
-// need to drive an actual Google OAuth consent screen in CI. This project's
-// pages don't have that helper wired up yet (that's what this test drives
-// into existence): a tiny debug page at tests/e2e/fixtures/auth-harness.html
-// that imports src/auth.js and exposes signInWithGoogle()/getCurrentUser()
-// to Playwright via page.evaluate, using the emulator's documented
-// "auto-accept" behavior for signInWithPopup when connectAuthEmulator is
-// active (the emulator never shows a real Google screen; it immediately
-// resolves with a deterministic fake account you select via the emulator UI
-// or a pre-configured test account).
+// signInWithPopup(), against the Auth emulator, opens a REAL popup window at
+// http://127.0.0.1:9099/emulator/auth/handler - the emulator's own "IDP
+// Login Widget". It is NOT auto-accepted; Playwright must catch the popup
+// and drive it like a user would: either click an existing account in the
+// list (`.js-reuse-account`, shown once that email has signed in before in
+// this emulator session) or, the first time, click "Add new account"
+// (`#add-account-button`), fill `#email-input`, and submit (`#sign-in`).
+// Verified directly against the running emulator (12.19.0) before writing
+// this - see the ledger.
 test("signing in with an allowed email exposes the user's email via getCurrentUser()", async ({
   page,
 }) => {
   await page.goto("/tests/e2e/fixtures/auth-harness.html?emulators=1");
+  const popupPromise = page.context().waitForEvent("page");
   await page.click("#trigger-sign-in");
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const existing = popup.locator(
+    '.js-reuse-account:has-text("hod@example.com")',
+  );
+  if ((await existing.count()) > 0) {
+    await existing.first().click();
+  } else {
+    await popup.click("#add-account-button");
+    await popup.fill("#email-input", "hod@example.com");
+    await popup.click("#sign-in");
+  }
   await expect(page.locator("#current-email")).toHaveText("hod@example.com", {
     timeout: 10000,
   });
@@ -431,7 +442,7 @@ Create `tests/e2e/fixtures/auth-harness.html`:
 
 (Every Firebase-importing bare specifier used anywhere in this plan is mapped here, even though this fixture only directly needs `firebase/auth`/`firebase/app` - `src/auth.js` itself only pulls in those two, so the `firebase/firestore` entry is harmless but unused in this particular fixture. Copy this exact import map into every other standalone test fixture HTML file this plan creates - Task 4's `store-harness.html` - so each resolves independently of `index.html`.)
 
-The Auth emulator intercepts `signInWithPopup` and, in headless/automated contexts, auto-resolves it against a deterministic test account rather than opening a real Google consent screen - Playwright drives the click, the emulator handles the rest with no external network call.
+The Auth emulator intercepts `signInWithPopup` and opens its own local "IDP Login Widget" popup instead of a real Google consent screen - no external network call - but Playwright still has to drive it (see Step 3's test code and its comment for the exact selectors).
 
 - [ ] **Step 5: Run it to verify it fails**
 
@@ -493,6 +504,15 @@ test("setData writes to Firestore and a second page load sees it", async ({
     '#table-subjects tbody tr:last-child input[data-field="name"]',
     "Test Subject",
   );
+  // setData() writes to Firestore in the background (fire-and-forget) and
+  // initStore() is a one-shot fetch, not a realtime listener - this app is
+  // "latest on open", not live-synced (see the design spec). A second
+  // client only sees this edit once it opens AFTER the write is confirmed
+  // durable, so wait for that confirmation before opening page2, rather
+  // than racing the background write.
+  await expect(page.locator("#save-status")).toHaveText("Saved", {
+    timeout: 10000,
+  });
 
   const page2 = await context.newPage();
   await page2.goto("/index.html?emulators=1");
@@ -529,8 +549,22 @@ test("a stale write is blocked with a plain-language conflict message", async ({
   );
 });
 
-async function signInAsHod(page) {
+async function signInAsHod(page, email = "hod@example.com") {
+  // Drives the Auth emulator's real IDP Login Widget popup - it is not
+  // auto-accepted. See Task 3's auth.spec.js comment for how this was
+  // verified against the running emulator.
+  const popupPromise = page.context().waitForEvent("page");
   await page.click("#sign-in-button");
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+  if ((await existing.count()) > 0) {
+    await existing.first().click();
+  } else {
+    await popup.click("#add-account-button");
+    await popup.fill("#email-input", email);
+    await popup.click("#sign-in");
+  }
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 ```
@@ -622,8 +656,7 @@ async function initStore() {
   const snap = await getDoc(mainDocRef());
   const fetched = snap.exists() ? snap.data() : emptyDeploymentDoc();
   loadedUpdatedAt = fetched.updatedAt || null;
-  const { updatedAt, updatedBy, ...rest } = fetched;
-  data = rest;
+  data = stripMeta(fetched);
 }
 
 class ConflictError extends Error {
@@ -637,6 +670,17 @@ function stripMeta({ updatedAt, updatedBy, ...rest }) {
   return rest;
 }
 
+// null means "no doc existed yet when I loaded" - that is itself a value to
+// compare, not a reason to skip the check. Treating "I loaded empty" and
+// "a doc now exists" as compatible is exactly the bug this guards against:
+// two clients both starting from a fresh (nonexistent) doc must still
+// conflict when the second one saves after the first created it.
+function timestampsEqual(a, b) {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return a.isEqual ? a.isEqual(b) : a === b;
+}
+
 async function writeToFirestore(next) {
   const ref = mainDocRef();
   const user = getCurrentUser();
@@ -645,12 +689,7 @@ async function writeToFirestore(next) {
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       const serverUpdatedAt = snap.exists() ? snap.data().updatedAt : null;
-      const bothPresent = loadedUpdatedAt && serverUpdatedAt;
-      const changed =
-        bothPresent &&
-        !(serverUpdatedAt.isEqual
-          ? serverUpdatedAt.isEqual(loadedUpdatedAt)
-          : serverUpdatedAt === loadedUpdatedAt);
+      const changed = !timestampsEqual(loadedUpdatedAt, serverUpdatedAt);
       if (changed) {
         throw new ConflictError(snap.data().updatedBy);
       }
@@ -667,8 +706,7 @@ async function writeToFirestore(next) {
     if (err instanceof ConflictError) {
       blocked = true;
       const snap = await getDoc(ref);
-      const { updatedAt, updatedBy, ...rest } = snap.data();
-      data = rest;
+      data = stripMeta(snap.data());
       listeners.forEach((fn) => fn());
       notifyStatus(
         "conflict",
@@ -767,24 +805,74 @@ Create `tests/e2e/fixtures/store-harness.html`:
 Add to `tests/e2e/store.spec.js`:
 
 ```js
-test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
-  page,
-}) => {
+// #load triggers signInWithGoogle() directly, which opens the Auth
+// emulator's real IDP Login Widget popup - it is not auto-accepted (see
+// Task 3's auth.spec.js comment for how this was verified).
+async function loadHarnessAndSignIn(page, email = "hod@example.com") {
   await page.goto("/tests/e2e/fixtures/store-harness.html?emulators=1");
+  const popupPromise = page.context().waitForEvent("page");
   await page.click("#load");
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+  if ((await existing.count()) > 0) {
+    await existing.first().click();
+  } else {
+    await popup.click("#add-account-button");
+    await popup.fill("#email-input", email);
+    await popup.click("#sign-in");
+  }
   await expect(page.locator("#data-out")).not.toHaveText("", {
     timeout: 10000,
   });
+}
+
+test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
+  page,
+}) => {
+  await loadHarnessAndSignIn(page);
   await page.click("#save");
   await expect(page.locator("#status-out")).toHaveText("saved", {
     timeout: 10000,
   });
 });
+
+test("two clients both starting from a not-yet-created doc: the second save is blocked, not silently merged", async ({
+  context,
+}) => {
+  // Guarantee deployments/main does not exist yet, regardless of what
+  // earlier tests in this run created - the Firestore emulator's clear-data
+  // endpoint wipes every document for this project. This is the exact race
+  // the conflict guard must catch: two clients that both loaded when there
+  // was no doc yet (loadedUpdatedAt === null on both) must still conflict
+  // once one of them has created it.
+  await fetch(
+    "http://127.0.0.1:8081/emulator/v1/projects/demo-my-deployment-buddy/databases/(default)/documents",
+    { method: "DELETE" },
+  );
+
+  const pageA = await context.newPage();
+  const pageB = await context.newPage();
+  await loadHarnessAndSignIn(pageA);
+  await loadHarnessAndSignIn(pageB);
+
+  await pageA.click("#save");
+  await expect(pageA.locator("#status-out")).toHaveText("saved", {
+    timeout: 10000,
+  });
+
+  // B still holds loadedUpdatedAt = null, but the doc now exists (created
+  // by A) - this must be treated as a conflict, not silently overwritten.
+  await pageB.click("#save");
+  await expect(pageB.locator("#status-out")).toContainText("conflict", {
+    timeout: 10000,
+  });
+});
 ```
 
-Run: `npm run emulators &` (wait ~5s), then `npx http-server -p 8080 -c-1 &`, then `npx playwright test tests/e2e/store.spec.js -g "initStore"`
+Run: `npm run emulators &` (wait ~5s), then `npx http-server -p 8080 -c-1 &`, then `npx playwright test tests/e2e/store.spec.js -g "initStore|not-yet-created"`
 Expected: FAIL before `store.js` is rewritten (Step 3) - confirm this ran RED before Step 3's code existed by checking it fails now for the right reason (`initStore is not a function` or similar), then re-run after Step 3's rewrite.
-Expected after Step 3: PASS. Stop both background processes afterward.
+Expected after Step 3: both PASS. Stop both background processes afterward.
 
 - [ ] **Step 5: Commit**
 
@@ -1576,9 +1664,15 @@ async function onSignedIn(user) {
   try {
     await initStore();
   } catch (err) {
-    alert(
-      `Could not load the deployment from the cloud: ${err.message}\n\nCheck your internet connection and that your account has access.`,
-    );
+    // A native alert() would never be visible to a test asserting on page
+    // content (Task 9's "unauthorized email" test checks page body text) -
+    // and a signed-in-but-denied user (wrong email, or Firestore briefly
+    // unreachable) deserves a persistent, readable message anyway, not a
+    // dismissable popup. #save-status already exists (Task 6) and is inside
+    // the now-visible #app-shell.
+    const status = document.getElementById("save-status");
+    status.textContent = `Could not load the deployment from the cloud: ${err.message}. Check your internet connection and that your account has access.`;
+    status.classList.add("error");
     return;
   }
 
@@ -1812,9 +1906,23 @@ export default defineConfig({
 Read `tests/e2e/deployment.spec.js` fully first (it already has a pattern for shared setup, per its existing structure) and add near the top, alongside any existing helpers:
 
 ```js
-async function signInAsHod(page) {
+async function signInAsHod(page, email = "hod@example.com") {
   await page.goto("/index.html?emulators=1");
+  // Drives the Auth emulator's real IDP Login Widget popup - it is not
+  // auto-accepted. See Task 3's auth.spec.js comment for how this was
+  // verified against the running emulator.
+  const popupPromise = page.context().waitForEvent("page");
   await page.click("#sign-in-button");
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+  if ((await existing.count()) > 0) {
+    await existing.first().click();
+  } else {
+    await popup.click("#add-account-button");
+    await popup.fill("#email-input", email);
+    await popup.click("#sign-in");
+  }
   await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 ```
@@ -1829,14 +1937,13 @@ Add to `tests/e2e/deployment.spec.js`:
 test("signing in with an email not on the allowlist is rejected with a clear message, not a blank app", async ({
   page,
 }) => {
-  await page.goto("/index.html?emulators=1");
-  // The Auth emulator's default test account for this harness is
-  // hod@example.com (matching firestore.rules); force a different,
-  // non-allowlisted identity via the same sign-in flow's account picker.
-  await page.click("#sign-in-button");
-  await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
-  // Signed in, but Firestore denies every read/write for this identity -
-  // initStore() must surface that as a message, not a silent blank page.
+  // hod@example.com and cohod@example.com are the only allowlisted emails
+  // (firestore.rules) - sign in as a third, non-allowlisted identity via
+  // the same widget flow signInAsHod() drives, by passing a different email.
+  await signInAsHod(page, "someone-else@example.com");
+  // Signed in (Auth doesn't restrict by email), but Firestore denies every
+  // read/write for this identity - initStore() must surface that as a
+  // message, not a silent blank page.
   await expect(page.locator("body")).toContainText(
     /could not load the deployment/i,
     { timeout: 10000 },
