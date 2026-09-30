@@ -13,6 +13,7 @@ import { getLayers } from "./layers/registry.js";
  *   pairByVarName: Map<string,{teacherId:string, groupId:string}>,
  *   constraints: {name:string, terms:{coef:number, varName:string}[], op:string, rhs:number}[],
  *   objectiveTerms: {coef:number, varName:string}[],
+ *   extraBinaryVars: string[],
  *   lp: string,
  * }}
  */
@@ -62,6 +63,7 @@ function buildModel(data) {
   });
 
   const constraints = [];
+  const extraBinaryVars = []; // Layer-declared 0/1 helper variables (not assignments).
   const objectiveByVar = new Map(); // varName -> summed coef. Multiple layers can
   // target the same variable's objective coefficient (e.g. stable.js and
   // placeholder.js both touch a placeholder teacher's pairs) - a CPLEX-LP row
@@ -87,6 +89,10 @@ function buildModel(data) {
     weight(layerId) {
       return weightOf(layerId);
     },
+    declareBinary(name) {
+      if (!extraBinaryVars.includes(name)) extraBinaryVars.push(name);
+      return name;
+    },
   };
 
   // 4. Every enabled layer (including qualification, whose build() is a no-op)
@@ -103,7 +109,7 @@ function buildModel(data) {
   })).filter((t) => t.coef !== 0);
 
   const lp = toLpString({
-    varNames: Array.from(pairByVarName.keys()),
+    varNames: [...pairByVarName.keys(), ...extraBinaryVars],
     constraints,
     objectiveTerms,
   });
@@ -114,6 +120,7 @@ function buildModel(data) {
     pairByVarName,
     constraints,
     objectiveTerms,
+    extraBinaryVars,
     lp,
   };
 }

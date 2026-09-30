@@ -164,8 +164,13 @@ test("stable layer rewards keeping current assignments and penalises new ones", 
 
 test("placeholder layer only adds objective terms when a placeholder teacher exists", () => {
   const data = fixture();
-  // Isolate from balance (on by default, adds its own objective terms).
-  data.layerSettings = [{ id: "balance", enabled: false, weight: 0 }];
+  // Isolate from the soft balance layers (on by default, each adds its own
+  // objective terms).
+  data.layerSettings = ["balance", "mix", "preps"].map((id) => ({
+    id,
+    enabled: false,
+    weight: 0,
+  }));
   const withoutPlaceholder = buildModel(data);
   assert.equal(
     withoutPlaceholder.objectiveTerms.length,
@@ -227,7 +232,10 @@ test("the generated LP text is well-formed CPLEX-LP", () => {
     .split("Binary\n")[1]
     .split("\nEnd")[0]
     .split("\n");
-  assert.equal(binaryLines.length, model.pairs.length);
+  assert.equal(
+    binaryLines.length,
+    model.pairs.length + model.extraBinaryVars.length,
+  );
 });
 
 test("toLpString() renders a small hand-built model exactly", () => {

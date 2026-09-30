@@ -208,6 +208,7 @@ function buildElasticLp(model) {
   lines.push(...constraintLines);
   lines.push("Binary");
   for (const v of model.varNameByPair.values()) lines.push(` ${v}`);
+  for (const v of model.extraBinaryVars || []) lines.push(` ${v}`);
   // Slack variables are intentionally left out of Binary/Integer sections,
   // so HiGHS treats them as continuous with the LP-format default bounds
   // (0 to +infinity) - exactly what a one-directional relaxation needs.

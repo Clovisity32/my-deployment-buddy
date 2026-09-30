@@ -24,6 +24,8 @@
 //   ctx.hasVar(teacherId, groupId)           whether a variable exists for that pair
 //   ctx.addConstraint(name, terms, op, rhs)  terms: [{coef, varName}]; op: '=' | '<=' | '>='
 //   ctx.addObjectiveTerm(coef, varName)      adds coef * varName to the (minimised) objective
+//   ctx.declareBinary(name)                  declares an extra 0/1 helper variable (returns name);
+//                                            any other variable used in a row is continuous and >= 0
 //   ctx.weight(layerId)                      resolves the configured weight for a layer (falls back to defaultWeight)
 
 import { coverageLayer } from "./coverage.js";
@@ -34,6 +36,8 @@ import { bandClashLayer } from "./bandClash.js";
 import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
 import { balanceLayer } from "./balance.js";
+import { mixLayer } from "./mix.js";
+import { prepsLayer } from "./preps.js";
 
 /** Layers in build order. Order matters only for readability of the LP output. */
 const LAYERS = [
@@ -43,6 +47,8 @@ const LAYERS = [
   pinLayer,
   bandClashLayer,
   balanceLayer,
+  mixLayer,
+  prepsLayer,
   stableLayer,
   placeholderLayer,
 ];
