@@ -164,6 +164,8 @@ test("stable layer rewards keeping current assignments and penalises new ones", 
 
 test("placeholder layer only adds objective terms when a placeholder teacher exists", () => {
   const data = fixture();
+  // Isolate from balance (on by default, adds its own objective terms).
+  data.layerSettings = [{ id: "balance", enabled: false, weight: 0 }];
   const withoutPlaceholder = buildModel(data);
   assert.equal(
     withoutPlaceholder.objectiveTerms.length,

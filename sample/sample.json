@@ -754,6 +754,11 @@
       "weight": 1
     },
     {
+      "id": "balance",
+      "enabled": true,
+      "weight": 1
+    },
+    {
       "id": "stable",
       "enabled": true,
       "weight": 5

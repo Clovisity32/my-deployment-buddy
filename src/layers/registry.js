@@ -33,6 +33,7 @@ import { pinLayer } from "./pin.js";
 import { bandClashLayer } from "./bandClash.js";
 import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
+import { balanceLayer } from "./balance.js";
 
 /** Layers in build order. Order matters only for readability of the LP output. */
 const LAYERS = [
@@ -41,6 +42,7 @@ const LAYERS = [
   loadCapLayer,
   pinLayer,
   bandClashLayer,
+  balanceLayer,
   stableLayer,
   placeholderLayer,
 ];
