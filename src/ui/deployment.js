@@ -6,15 +6,20 @@
 
 import { getData, setData } from "./store.js";
 import { esc } from "./dom.js";
+import { effectiveCap } from "../data.js";
 import {
   buildDeploymentView,
   buildSummary,
   buildTeacherView,
+  isLoadCapEnabled,
+  teacherLoad,
+  wouldExceedCap,
 } from "../view.js";
 
 // Local UI-only state (not persisted to `data`), same convention as
 // initTabs()'s active-tab tracking in ui.js.
 let viewMode = "sheet"; // 'sheet' | 'teacher'
+let editWarning = ""; // Plain-language reason a manual edit was refused; cleared on the next accepted edit.
 
 const STREAM_CLASSES = new Set(["G1", "G2", "G3", "PURE"]);
 
@@ -24,6 +29,10 @@ function qualifiedTeachers(data, subjectId) {
     (t) =>
       Array.isArray(t.qualifications) && t.qualifications.includes(subjectId),
   );
+}
+
+function teacherLoadLabel(data, t) {
+  return `${teacherLoad(data, t.id)}/${effectiveCap(data, t)}`;
 }
 
 function renderDeployment() {
@@ -38,9 +47,13 @@ function renderSummary() {
   if (!box) return;
 
   const warningLines = [];
+  if (editWarning) warningLines.push(esc(editWarning));
   if (summary.teachersOverCap.length > 0) {
     warningLines.push(
-      `${esc(summary.teachersOverCap.length)} teacher(s) are over their load cap: ${summary.teachersOverCap.map((t) => esc(t.name)).join(", ")}.`,
+      `${esc(summary.teachersOverCap.length)} teacher(s) are over their load cap: ${summary.teachersOverCap.map((t) => `${esc(t.name)} (${esc(t.load)}/${esc(t.cap)})`).join(", ")}.` +
+        (isLoadCapEnabled(data)
+          ? " Solve will not accept this deployment while Load cap is ticked - unlock some assignments, raise a cap, or move a group to a teacher with spare room."
+          : ""),
     );
   }
   if (summary.teachersUnderRole.length > 0) {
@@ -137,7 +150,7 @@ function renderSeat(data, row, group, seatIndex) {
     '<option value="">(none)</option>',
     ...qualifiedTeachers(data, subjectId).map(
       (t) =>
-        `<option value="${esc(t.id)}" ${t.id === currentTeacherId ? "selected" : ""}>${esc(t.name)}${t.isPlaceholder ? " (placeholder)" : ""}</option>`,
+        `<option value="${esc(t.id)}" ${t.id === currentTeacherId ? "selected" : ""}>${esc(t.name)}${t.isPlaceholder ? " (placeholder)" : ` (${esc(teacherLoadLabel(data, t))})`}</option>`,
     ),
   ].join("");
   const isLocked = Boolean(
@@ -242,6 +255,21 @@ function wireDeployment() {
 
     if (e.target.dataset.action === "reassign") {
       const newTeacherId = e.target.value;
+      const currentTeacherId = seatTeacherId(data, groupId, seatIndex);
+      if (
+        newTeacherId &&
+        newTeacherId !== currentTeacherId &&
+        isLoadCapEnabled(data)
+      ) {
+        const check = wouldExceedCap(data, newTeacherId, groupId);
+        if (check.exceeds) {
+          const t = data.teachers.find((x) => x.id === newTeacherId);
+          editWarning = `${t.name} can't take this group: it would bring their load to ${check.newLoad}, over their cap of ${check.cap}. Pick a teacher with spare room, or untick Load cap in the Layers tab.`;
+          renderSummary();
+          renderBody(); // Snap the dropdown back to the current teacher.
+          return;
+        }
+      }
       assignmentsForGroup[seatIndex] = newTeacherId
         ? { teacherId: newTeacherId, groupId, locked: false }
         : undefined;
@@ -257,6 +285,7 @@ function wireDeployment() {
       return;
     }
 
+    editWarning = "";
     setData({ ...data, assignments: [...others, ...assignmentsForGroup] });
   });
 }

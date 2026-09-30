@@ -6,6 +6,8 @@ import path from "node:path";
 import {
   buildDeploymentView,
   buildSummary,
+  isLoadCapEnabled,
+  wouldExceedCap,
   buildTeacherView,
 } from "../../src/view.js";
 
@@ -381,4 +383,31 @@ test("buildTeacherView() runs against the real sample school without throwing", 
     assert.equal(typeof row.cap, "number");
     assert.ok(Array.isArray(row.groups));
   }
+});
+
+test("wouldExceedCap() flags a teacher who would go past their cap, not one with room", () => {
+  const data = fixtureV2();
+  // Dee (cap 5) is already at 6 periods; anyone else has cap 20.
+  const dee = wouldExceedCap(data, "t4", data.groups[0].id);
+  assert.equal(dee.exceeds, true);
+  assert.equal(dee.cap, 5);
+  const amy = wouldExceedCap(data, "t1", data.groups[0].id);
+  assert.equal(amy.exceeds, false);
+});
+
+test("wouldExceedCap() never flags a placeholder teacher, and ignores a group the teacher already has", () => {
+  const data = fixtureV2();
+  const ph = data.teachers.find((t) => t.isPlaceholder);
+  if (ph) assert.equal(wouldExceedCap(data, ph.id, data.groups[0].id).exceeds, false);
+  const held = data.assignments.find((a) => a.teacherId === "t4");
+  const r = wouldExceedCap(data, "t4", held.groupId);
+  assert.equal(r.newLoad, r.load);
+});
+
+test("isLoadCapEnabled() defaults to on and respects an unticked layer", () => {
+  assert.equal(isLoadCapEnabled({}), true);
+  assert.equal(
+    isLoadCapEnabled({ layerSettings: [{ id: "loadCap", enabled: false }] }),
+    false,
+  );
 });

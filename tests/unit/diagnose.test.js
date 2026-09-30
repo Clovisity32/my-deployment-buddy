@@ -412,3 +412,21 @@ test("diagnoseInfeasibility() falls back to an elastic re-solve for a band clash
     `expected an issue naming Amy and Band A, got: ${JSON.stringify(diagnosis.issues)}`,
   );
 });
+
+test("explainConstraint() for an uncovered group names qualified teachers and their room under the cap", () => {
+  const data = {
+    roles: [{ id: "r", name: "R", maxPeriods: 8 }],
+    subjects: [],
+    teachers: [
+      { id: "t1", name: "Amy", roleId: "r", capOverride: null, qualifications: ["chem"] },
+      { id: "t2", name: "Ben", roleId: "r", capOverride: null, qualifications: ["phy"] },
+    ],
+    groups: [
+      { id: "g1", label: "Group A", periods: 8, teachersNeeded: 1, subjectId: "chem" },
+    ],
+    assignments: [{ teacherId: "t1", groupId: "g1", locked: true }],
+  };
+  const msg = explainConstraint("coverage_g1", data, 1);
+  assert.ok(msg.includes("Amy (cap 8, 8 locked, room 0)"), msg);
+  assert.ok(!msg.includes("Ben"), "unqualified teachers must not be listed");
+});

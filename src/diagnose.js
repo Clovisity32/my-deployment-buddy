@@ -232,6 +232,30 @@ function renderRow(name, terms, op, rhs) {
   return ` ${safeName}:${lhs} ${op} ${rhs}`;
 }
 
+/**
+ * For an uncovered group: who is qualified, and how much room each has left
+ * once locked assignments are counted - usually the real reason it can't be
+ * covered. Returns "" when there is nothing useful to add.
+ */
+function describeQualifiedRoom(data, group) {
+  if (!group.subjectId) return "";
+  const groupById = new Map(data.groups.map((g) => [g.id, g]));
+  const qualified = data.teachers.filter(
+    (t) =>
+      Array.isArray(t.qualifications) &&
+      t.qualifications.includes(group.subjectId),
+  );
+  if (qualified.length === 0) return "";
+  const parts = qualified.map((t) => {
+    const cap = effectiveCap(data, t);
+    const locked = (data.assignments || [])
+      .filter((a) => a.teacherId === t.id && a.locked)
+      .reduce((sum, a) => sum + (groupById.get(a.groupId)?.periods || 0), 0);
+    return `${t.name} (cap ${cap}, ${locked} locked, room ${Math.max(0, cap - locked)})`;
+  });
+  return ` Qualified teachers and their room under the cap once locked assignments are counted: ${parts.join("; ")}. Unlock some assignments or raise a cap to free room.`;
+}
+
 /** Turns a violated constraint name into one plain-language sentence. */
 function explainConstraint(constraintName, data, slackValue) {
   const groupById = new Map(data.groups.map((g) => [g.id, g]));
@@ -242,7 +266,7 @@ function explainConstraint(constraintName, data, slackValue) {
     const groupId = constraintName.slice("coverage_".length);
     const g = groupById.get(groupId);
     return g
-      ? `"${g.label}" is short ${rounded} teacher assignment(s) - it needs ${g.teachersNeeded}, but the other constraints leave it uncovered.`
+      ? `"${g.label}" is short ${rounded} teacher assignment(s) - it needs ${g.teachersNeeded}, but the other constraints leave it uncovered.${describeQualifiedRoom(data, g)}`
       : `Group "${groupId}" could not be fully covered.`;
   }
   if (constraintName.startsWith("loadCap_")) {

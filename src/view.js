@@ -217,4 +217,63 @@ function buildTeacherView(data) {
   );
 }
 
-export { buildDeploymentView, buildSummary, buildTeacherView };
+/**
+ * True unless the Load cap layer has been unticked in the Layers tab
+ * (mirrors model.js: an unconfigured layer defaults to enabled).
+ * @param {any} data
+ */
+function isLoadCapEnabled(data) {
+  const setting = (Array.isArray(data?.layerSettings) ? data.layerSettings : [])
+    .find((s) => s && s.id === "loadCap");
+  return setting ? setting.enabled !== false : true;
+}
+
+/** Total periods currently assigned to a teacher. */
+function teacherLoad(data, teacherId) {
+  const groups = Array.isArray(data?.groups) ? data.groups : [];
+  return (Array.isArray(data?.assignments) ? data.assignments : [])
+    .filter((a) => a.teacherId === teacherId)
+    .reduce((sum, a) => {
+      const g = groups.find((x) => x.id === a.groupId);
+      return sum + (g ? g.periods : 0);
+    }, 0);
+}
+
+/**
+ * Would giving `teacherId` the group `groupId` push them past their cap?
+ * Placeholder teachers are never flagged (they stand in for a hiring gap).
+ * A teacher already on the group is not double-counted.
+ * @param {any} data
+ * @param {string} teacherId
+ * @param {string} groupId
+ * @returns {{exceeds:boolean, load:number, newLoad:number, cap:number}}
+ */
+function wouldExceedCap(data, teacherId, groupId) {
+  const teacher = (data?.teachers || []).find((t) => t.id === teacherId);
+  const groups = Array.isArray(data?.groups) ? data.groups : [];
+  const assignments = Array.isArray(data?.assignments) ? data.assignments : [];
+  const group = groups.find((g) => g.id === groupId);
+  if (!teacher || !group) return { exceeds: false, load: 0, newLoad: 0, cap: 0 };
+
+  const cap = effectiveCap(data, teacher);
+  const load = teacherLoad(data, teacherId);
+  const alreadyOnGroup = assignments.some(
+    (a) => a.teacherId === teacherId && a.groupId === groupId,
+  );
+  const newLoad = alreadyOnGroup ? load : load + group.periods;
+  return {
+    exceeds: !teacher.isPlaceholder && newLoad > cap,
+    load,
+    newLoad,
+    cap,
+  };
+}
+
+export {
+  buildDeploymentView,
+  buildSummary,
+  buildTeacherView,
+  isLoadCapEnabled,
+  teacherLoad,
+  wouldExceedCap,
+};
