@@ -37,7 +37,9 @@ test("setData writes to Firestore and a second page load sees it", async ({
 
   const page2 = await context.newPage();
   await page2.goto("/index.html?emulators=1");
-  await signInAsHod(page2);
+  // No sign-in here: page2 shares this context's persisted Firebase auth
+  // session, so the sign-in button is hidden and the app boots signed in.
+  await page2.click('[data-tab="subjects"]');
   await expect(
     page2.locator(
       '#table-subjects tbody tr:last-child input[data-field="name"]',

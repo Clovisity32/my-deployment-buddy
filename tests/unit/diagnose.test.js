@@ -418,11 +418,29 @@ test("explainConstraint() for an uncovered group names qualified teachers and th
     roles: [{ id: "r", name: "R", maxPeriods: 8 }],
     subjects: [],
     teachers: [
-      { id: "t1", name: "Amy", roleId: "r", capOverride: null, qualifications: ["chem"] },
-      { id: "t2", name: "Ben", roleId: "r", capOverride: null, qualifications: ["phy"] },
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "r",
+        capOverride: null,
+        qualifications: ["chem"],
+      },
+      {
+        id: "t2",
+        name: "Ben",
+        roleId: "r",
+        capOverride: null,
+        qualifications: ["phy"],
+      },
     ],
     groups: [
-      { id: "g1", label: "Group A", periods: 8, teachersNeeded: 1, subjectId: "chem" },
+      {
+        id: "g1",
+        label: "Group A",
+        periods: 8,
+        teachersNeeded: 1,
+        subjectId: "chem",
+      },
     ],
     assignments: [{ teacherId: "t1", groupId: "g1", locked: true }],
   };

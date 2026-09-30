@@ -398,7 +398,8 @@ test("wouldExceedCap() flags a teacher who would go past their cap, not one with
 test("wouldExceedCap() never flags a placeholder teacher, and ignores a group the teacher already has", () => {
   const data = fixtureV2();
   const ph = data.teachers.find((t) => t.isPlaceholder);
-  if (ph) assert.equal(wouldExceedCap(data, ph.id, data.groups[0].id).exceeds, false);
+  if (ph)
+    assert.equal(wouldExceedCap(data, ph.id, data.groups[0].id).exceeds, false);
   const held = data.assignments.find((a) => a.teacherId === "t4");
   const r = wouldExceedCap(data, "t4", held.groupId);
   assert.equal(r.newLoad, r.load);

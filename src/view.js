@@ -223,8 +223,9 @@ function buildTeacherView(data) {
  * @param {any} data
  */
 function isLoadCapEnabled(data) {
-  const setting = (Array.isArray(data?.layerSettings) ? data.layerSettings : [])
-    .find((s) => s && s.id === "loadCap");
+  const setting = (
+    Array.isArray(data?.layerSettings) ? data.layerSettings : []
+  ).find((s) => s && s.id === "loadCap");
   return setting ? setting.enabled !== false : true;
 }
 
@@ -253,7 +254,8 @@ function wouldExceedCap(data, teacherId, groupId) {
   const groups = Array.isArray(data?.groups) ? data.groups : [];
   const assignments = Array.isArray(data?.assignments) ? data.assignments : [];
   const group = groups.find((g) => g.id === groupId);
-  if (!teacher || !group) return { exceeds: false, load: 0, newLoad: 0, cap: 0 };
+  if (!teacher || !group)
+    return { exceeds: false, load: 0, newLoad: 0, cap: 0 };
 
   const cap = effectiveCap(data, teacher);
   const load = teacherLoad(data, teacherId);
