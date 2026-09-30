@@ -3,7 +3,7 @@
 // class/band/role problems without needing to solve first.
 
 import { getData, setData } from "./store.js";
-import { esc, genId } from "./dom.js";
+import { esc, genId, isBlankNumberInput } from "./dom.js";
 import { rebuildGroups, setupWarnings } from "../setup.js";
 
 // See subjects.js for why edits here immediately fold in rebuildGroups(). As
@@ -272,6 +272,7 @@ function wireBands() {
       );
       setDataAndRegenerate({ ...data, bands });
     } else if (e.target.dataset.field === "groups") {
+      if (isBlankNumberInput(e.target)) return;
       const index = Number(e.target.dataset.index);
       const bands = data.bands.map((b) => {
         if (b.id !== id) return b;

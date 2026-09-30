@@ -4,7 +4,7 @@
 // or their own entry.
 
 import { getData, setData } from "./store.js";
-import { esc, genId } from "./dom.js";
+import { esc, genId, isBlankNumberInput } from "./dom.js";
 import { rebuildGroups } from "../setup.js";
 
 const LEVELS = [1, 2, 3, 4, 5];
@@ -94,6 +94,7 @@ function wireSubjects() {
     if (!row) return;
     const field = e.target.dataset.field;
     if (!field) return;
+    if (isBlankNumberInput(e.target)) return;
     const id = row.dataset.id;
     const data = getData();
     const subjects = data.subjects.map((s) => {

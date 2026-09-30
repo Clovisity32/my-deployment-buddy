@@ -395,6 +395,38 @@ test.describe("My Deployment Buddy", () => {
     ).toHaveCount(0);
   });
 
+  test("a number box can be emptied and retyped, and reverts if left empty", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await page.click('nav.tabs button[data-tab="teachers"]');
+    const box = page
+      .locator('#table-roles input[data-field="maxPeriods"]')
+      .first();
+    const before = await box.inputValue();
+    expect(Number(before)).toBeGreaterThan(0);
+
+    // Deleting every digit leaves the box empty - it must not snap back to 0.
+    await box.fill("");
+    await expect(box).toHaveValue("");
+    await expect(box).toBeFocused();
+
+    // Typing a fresh number then saves it.
+    await box.pressSequentially("47");
+    await expect(box).toHaveValue("47");
+    expect(
+      (await readStoredData(page)).roles.find((r) => r.maxPeriods === 47),
+    ).toBeTruthy();
+
+    // Leaving it empty restores the last saved value rather than saving 0.
+    await box.fill("");
+    await box.blur();
+    await expect(box).toHaveValue("47");
+    expect(
+      (await readStoredData(page)).roles.some((r) => r.maxPeriods === 0),
+    ).toBe(false);
+  });
+
   test("exporting to Excel and re-importing restores the deployment without re-solving", async ({
     page,
   }) => {

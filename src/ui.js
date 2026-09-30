@@ -18,7 +18,13 @@ import {
 import { exportWorkbook, importWorkbook } from "./excel.js";
 import { getLayers } from "./layers/registry.js";
 
-import { esc, genId, withFocusPreserved } from "./ui/dom.js";
+import {
+  esc,
+  genId,
+  withFocusPreserved,
+  isBlankNumberInput,
+  installBlankNumberRestore,
+} from "./ui/dom.js";
 import {
   initStore,
   getData,
@@ -122,6 +128,7 @@ function wireLayers() {
         layerSettings: [...existing, { ...current, enabled: e.target.checked }],
       });
     } else if (e.target.dataset.action === "weight-layer") {
+      if (isBlankNumberInput(e.target)) return;
       setData({
         ...data,
         layerSettings: [
@@ -432,6 +439,7 @@ async function onSignedIn(user) {
     wireLayers();
     wireDeployment();
     wireVersions();
+    installBlankNumberRestore();
     wireFileActions();
     onChange(() =>
       withFocusPreserved(document.getElementById("app-shell"), renderAll),

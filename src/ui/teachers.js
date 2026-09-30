@@ -3,7 +3,7 @@
 // by discipline with a per-row "tick all in this discipline" mini-button).
 
 import { getData, setData } from "./store.js";
-import { esc, genId } from "./dom.js";
+import { esc, genId, isBlankNumberInput } from "./dom.js";
 
 function renderTeachers() {
   renderRoles();
@@ -50,7 +50,7 @@ function renderTeacherTable() {
       const capCell =
         role && role.maxPeriods !== null
           ? `<span class="muted">${esc(role.maxPeriods)} (from role)</span>`
-          : `<input data-field="capOverride" type="number" min="0" value="${esc(t.capOverride ?? "")}" required />`;
+          : `<input data-field="capOverride" data-blank-ok type="number" min="0" value="${esc(t.capOverride ?? "")}" required />`;
       return `
       <tr data-id="${esc(t.id)}">
         <td><input data-field="name" value="${esc(t.name)}" /></td>
@@ -149,6 +149,7 @@ function wireRoles() {
     const id = row.dataset.id;
     const field = e.target.dataset.field;
     if (!field) return;
+    if (isBlankNumberInput(e.target)) return;
     const data = getData();
     const roles = data.roles.map((r) => {
       if (r.id !== id) return r;

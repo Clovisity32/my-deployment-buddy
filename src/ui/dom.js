@@ -58,10 +58,26 @@ function withFocusPreserved(container, renderFn) {
     const selectionEnd =
       typeof active.selectionEnd === "number" ? active.selectionEnd : null;
 
+    const wasNumber = active.type === "number";
+
     restore = () => {
       const found = container.querySelector(selector);
       if (!found) return;
       found.focus();
+      if (wasNumber) {
+        // A number box reports no selection and refuses setSelectionRange,
+        // so after the re-render its caret lands at the START - typing "47"
+        // would then produce "74". Briefly treat it as text to park the
+        // caret at the end, where typing and Backspace both expect it.
+        try {
+          found.type = "text";
+          const end = found.value.length;
+          found.setSelectionRange(end, end);
+        } finally {
+          found.type = "number";
+        }
+        return;
+      }
       if (selectionStart === null) return;
       try {
         found.setSelectionRange(selectionStart, selectionEnd);
@@ -76,4 +92,39 @@ function withFocusPreserved(container, renderFn) {
   if (restore) restore();
 }
 
-export { esc, genId, withFocusPreserved };
+/**
+ * True while the user has emptied a number box mid-edit (also true for
+ * half-typed input like "-", which a number box reports as ""). Input
+ * handlers must NOT coerce that to 0/1 and write it back: the re-render
+ * would put the coerced value straight back into the box, so the last digit
+ * could never be deleted. Ignore the event instead; the last valid value
+ * stays in the data until a real number is typed.
+ */
+function isBlankNumberInput(el) {
+  return el.type === "number" && el.value === "";
+}
+
+/**
+ * If the user leaves a required number box empty, put back the last valid
+ * value (the value the box was rendered with - every valid keystroke
+ * re-renders, so that is always the latest saved value) instead of leaving
+ * an empty box that disagrees with the saved data. Boxes where empty is a
+ * real answer opt out with data-blank-ok.
+ */
+function installBlankNumberRestore() {
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    if (!isBlankNumberInput(el) || "blankOk" in el.dataset) return;
+    if (!el.dataset.field && el.dataset.action !== "weight-layer") return;
+    el.value = el.defaultValue;
+  });
+}
+
+export {
+  esc,
+  genId,
+  withFocusPreserved,
+  isBlankNumberInput,
+  installBlankNumberRestore,
+};

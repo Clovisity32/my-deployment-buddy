@@ -4,7 +4,7 @@
 // custom-groups table, and an explicit "Regenerate groups" button.
 
 import { getData, setData } from "./store.js";
-import { esc, genId } from "./dom.js";
+import { esc, genId, isBlankNumberInput } from "./dom.js";
 import { rebuildGroups } from "../setup.js";
 
 // See subjects.js for why edits here fold in rebuildGroups(). Here we also
@@ -125,6 +125,7 @@ function wireGeneratedGroups() {
     if (!row) return;
     const field = e.target.dataset.field;
     if (!field) return;
+    if (isBlankNumberInput(e.target)) return;
     const groupId = row.dataset.id;
     const data = getData();
     const existing = (data.groupOverrides || {})[groupId] || {};
@@ -179,6 +180,7 @@ function wireCustomGroups() {
     const id = row.dataset.id;
     const field = e.target.dataset.field;
     if (!field) return;
+    if (isBlankNumberInput(e.target)) return;
     const data = getData();
     const customGroups = data.customGroups.map((g) => {
       if (g.id !== id) return g;
