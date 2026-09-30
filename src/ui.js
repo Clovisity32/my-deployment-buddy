@@ -12,6 +12,7 @@ import {
   saveVersion,
   listVersions,
   restoreVersion,
+  deleteVersion,
   compareAssignments,
 } from "./versions.js";
 import { exportWorkbook, importWorkbook } from "./excel.js";
@@ -152,12 +153,7 @@ async function onSolve() {
     // or not the solve itself succeeds.
     const working = getData();
     if ((working.assignments || []).length > 0) {
-      await saveVersion(
-        getFirestoreDb(),
-        "Auto-save before solve",
-        working.assignments,
-        working.layerSettings,
-      );
+      await saveVersion(getFirestoreDb(), "Auto-save before solve", working);
     }
 
     const model = buildModel(working);
@@ -209,27 +205,38 @@ function wasLocked(beforeData, assignment) {
 // Versions tab
 // ---------------------------------------------------------------------------
 
+function setVersionsStatus(html, kind) {
+  const box = document.getElementById("versions-status");
+  box.innerHTML = html ? `<div class="status ${kind}">${html}</div>` : "";
+}
+
 function renderVersions() {
   const list = document.getElementById("versions-list");
   list.innerHTML = "<li>Loading versions…</li>";
   const data = getData();
-  listVersions(getFirestoreDb(), data.assignments || []).then((versions) => {
-    if (versions.length === 0) {
-      list.innerHTML = "<li>No saved versions yet.</li>";
-      return;
-    }
-    list.innerHTML = versions
-      .map(
-        (v) => `
+  listVersions(getFirestoreDb(), data.assignments || [])
+    .then((versions) => {
+      if (versions.length === 0) {
+        list.innerHTML = "<li>No saved versions yet.</li>";
+        return;
+      }
+      list.innerHTML = versions
+        .map(
+          (v) => `
       <li>
         <strong>${esc(v.name)}</strong> - <small>${esc(new Date(v.timestamp).toLocaleString())}</small>
+        <small>[${v.scope === "full" ? "full setup" : "assignments only"}]</small>
         (${v.changedCount === 0 ? "same as current" : `${v.changedCount} group(s) differ from current`})
-        <button data-action="restore-version" data-id="${esc(v.id)}">Restore</button>
+        <button data-action="restore-version" data-id="${esc(v.id)}" data-name="${esc(v.name)}" data-scope="${esc(v.scope)}">Restore</button>
+        <button class="secondary" data-action="delete-version" data-id="${esc(v.id)}" data-name="${esc(v.name)}">Delete version</button>
       </li>
     `,
-      )
-      .join("");
-  });
+        )
+        .join("");
+    })
+    .catch((err) => {
+      list.innerHTML = `<li>Could not load saved versions: ${esc(err.message)}. Check your connection and try again.</li>`;
+    });
 }
 
 function wireVersions() {
@@ -237,35 +244,71 @@ function wireVersions() {
     .getElementById("btn-save-version")
     .addEventListener("click", async () => {
       const input = document.getElementById("version-name");
-      const data = getData();
       const name = input.value.trim() || "Version";
-      await saveVersion(
-        getFirestoreDb(),
-        name,
-        data.assignments,
-        data.layerSettings,
-      );
-      input.value = "";
-      renderVersions();
+      setVersionsStatus("Saving version…", "info");
+      try {
+        await saveVersion(getFirestoreDb(), name, getData());
+        input.value = "";
+        setVersionsStatus(`Saved "${esc(name)}".`, "ok");
+        renderVersions();
+      } catch (err) {
+        setVersionsStatus(
+          `Could not save the version: ${esc(err.message)}. Check your connection and press Save version again.`,
+          "error",
+        );
+      }
     });
 
   document
     .getElementById("versions-list")
     .addEventListener("click", async (e) => {
-      if (e.target.dataset.action !== "restore-version") return;
-      const versionId = e.target.dataset.id;
-      if (
-        !confirm(
-          "Restore this version? Your current (unsaved-as-a-version) changes will be replaced.",
+      const { action, id: versionId, name, scope } = e.target.dataset;
+      if (action === "restore-version") {
+        const message =
+          scope === "full"
+            ? `Restore "${name}"?
+
+This replaces the teachers, bands, groups, assignments and layer settings with the saved ones, for everyone using this deployment (including your co-HOD). Your current state is saved first as "Auto-save before restore", so you can undo this.`
+            : `Restore "${name}"?
+
+This is an older version that only holds assignments and layer settings. Those are replaced; teachers, bands and groups stay as they are now. Your current state is saved first as "Auto-save before restore", so you can undo this.`;
+        if (!confirm(message)) return;
+        setVersionsStatus("Restoring…", "info");
+        try {
+          const db = getFirestoreDb();
+          await saveVersion(db, "Auto-save before restore", getData());
+          const restored = await restoreVersion(db, getData(), versionId);
+          await setData(restored);
+          setVersionsStatus(
+            `Restored "${esc(name)}". Your previous state was saved as "Auto-save before restore".`,
+            "ok",
+          );
+          renderVersions();
+        } catch (err) {
+          setVersionsStatus(
+            `Could not restore "${esc(name)}": ${esc(err.message)}. Nothing was changed - check your connection and try again.`,
+            "error",
+          );
+        }
+      } else if (action === "delete-version") {
+        if (
+          !confirm(`Delete "${name}"?
+
+This can't be undone.`)
         )
-      )
-        return;
-      const restored = await restoreVersion(
-        getFirestoreDb(),
-        getData(),
-        versionId,
-      );
-      setData(restored);
+          return;
+        setVersionsStatus("Deleting…", "info");
+        try {
+          await deleteVersion(getFirestoreDb(), versionId);
+          setVersionsStatus(`Deleted "${esc(name)}".`, "ok");
+          renderVersions();
+        } catch (err) {
+          setVersionsStatus(
+            `Could not delete "${esc(name)}": ${esc(err.message)}. It is still saved - check your connection and try again.`,
+            "error",
+          );
+        }
+      }
     });
 }
 

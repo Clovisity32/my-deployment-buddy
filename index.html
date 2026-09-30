@@ -75,6 +75,10 @@
       button.primary:hover {
         background: var(--accent-hover);
       }
+      button.secondary {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -751,6 +755,7 @@
             />
             <button id="btn-save-version">Save version</button>
           </div>
+          <div id="versions-status"></div>
           <ul class="versions-list" id="versions-list"></ul>
         </section>
       </main>

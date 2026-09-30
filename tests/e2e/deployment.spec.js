@@ -342,6 +342,59 @@ test.describe("My Deployment Buddy", () => {
     expect(key(second)).toEqual(key(first));
   });
 
+  test("restoring a version brings back the whole setup, and Delete version removes it", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await solve(page);
+    const original = await readStoredData(page);
+    const originalName = original.teachers[0].name;
+
+    await page.click('nav.tabs button[data-tab="versions"]');
+    await page.fill("#version-name", "Snap A");
+    await page.click("#btn-save-version");
+    const snapRow = page.locator("#versions-list li", { hasText: "Snap A" });
+    await expect(snapRow).toContainText("full setup", { timeout: 10000 });
+
+    // Edit the setup (not just assignments) after the snapshot.
+    await page.evaluate(async () => {
+      const { getData, setData } = await import("/src/ui/store.js");
+      const d = getData();
+      await setData({
+        ...d,
+        teachers: d.teachers.map((t, i) =>
+          i === 0 ? { ...t, name: "Renamed After Snapshot" } : t,
+        ),
+      });
+    });
+    expect((await readStoredData(page)).teachers[0].name).toBe(
+      "Renamed After Snapshot",
+    );
+
+    page.once("dialog", (d) => d.accept());
+    await snapRow.locator('button[data-action="restore-version"]').click();
+    await expect(page.locator("#versions-status .status.ok")).toContainText(
+      "Restored",
+      { timeout: 10000 },
+    );
+    expect((await readStoredData(page)).teachers[0].name).toBe(originalName);
+    await expect(
+      page.locator("#versions-list li", {
+        hasText: "Auto-save before restore",
+      }),
+    ).toHaveCount(1);
+
+    page.once("dialog", (d) => d.accept());
+    await snapRow.locator('button[data-action="delete-version"]').click();
+    await expect(page.locator("#versions-status .status.ok")).toContainText(
+      "Deleted",
+      { timeout: 10000 },
+    );
+    await expect(
+      page.locator("#versions-list li", { hasText: "Snap A" }),
+    ).toHaveCount(0);
+  });
+
   test("exporting to Excel and re-importing restores the deployment without re-solving", async ({
     page,
   }) => {

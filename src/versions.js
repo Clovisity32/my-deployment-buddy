@@ -7,40 +7,79 @@
 // compareAssignments() is unchanged from before this file's Firestore
 // rewrite: pure, synchronous, no storage dependency.
 
-import { collection, addDoc, getDocs, doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  deleteDoc,
+} from "firebase/firestore";
 
 function versionsCollection(db) {
   return collection(db, "deployments", "main", "versions");
 }
 
+// Everything that defines "the setup" besides assignments/layerSettings. A
+// full-scope version snapshots these too, so restoring brings back the
+// teachers, bands and groups as they were - not just who teaches what.
+// Versions saved before full snapshots existed only hold assignments and
+// layerSettings (scope "assignments"); restoring one leaves the current
+// setup untouched.
+const SETUP_FIELDS = [
+  "roles",
+  "subjects",
+  "classes",
+  "bands",
+  "teachers",
+  "groups",
+  "groupOverrides",
+  "customGroups",
+];
+
 /**
+ * Snapshots the full deployment: setup, assignments and layer settings.
  * @param {any} db Firestore instance (store.js's getFirestoreDb())
  * @param {string} name
- * @param {{groupId:string, teacherId:string, locked:boolean}[]} assignments
- * @param {{id:string, enabled:boolean, weight:number}[]} layerSettings
+ * @param {import('./data.js').default} data the current deployment data
  * @param {string} [timestamp] ISO string; defaults to now. Passed explicitly in tests for determinism.
  * @returns {Promise<string>} the new version's Firestore document id
  */
 async function saveVersion(
   db,
   name,
-  assignments,
-  layerSettings,
+  data,
   timestamp = new Date().toISOString(),
 ) {
-  const ref = await addDoc(versionsCollection(db), {
+  const snapshot = {
     name,
     timestamp,
-    assignments: deepCopy(assignments),
-    layerSettings: deepCopy(layerSettings),
-  });
+    scope: "full",
+    assignments: deepCopy(data.assignments || []),
+    layerSettings: deepCopy(data.layerSettings || []),
+  };
+  for (const field of SETUP_FIELDS) {
+    if (data[field] !== undefined) snapshot[field] = deepCopy(data[field]);
+  }
+  const ref = await addDoc(versionsCollection(db), snapshot);
   return ref.id;
+}
+
+/**
+ * Permanently deletes one saved version. Deleting an id that doesn't exist
+ * is a no-op (Firestore's deleteDoc doesn't fail on a missing document).
+ * @param {any} db
+ * @param {string} versionId
+ * @returns {Promise<void>}
+ */
+async function deleteVersion(db, versionId) {
+  await deleteDoc(doc(db, "deployments", "main", "versions", versionId));
 }
 
 /**
  * @param {any} db
  * @param {{groupId:string, teacherId:string, locked:boolean}[]} currentAssignments
- * @returns {Promise<{id:string, name:string, timestamp:string, changedCount:number}[]>} newest first
+ * @returns {Promise<{id:string, name:string, timestamp:string, changedCount:number, scope:"full"|"assignments"}[]>} newest first
  */
 async function listVersions(db, currentAssignments) {
   const snap = await getDocs(versionsCollection(db));
@@ -51,6 +90,7 @@ async function listVersions(db, currentAssignments) {
         id: d.id,
         name: v.name,
         timestamp: v.timestamp,
+        scope: v.scope === "full" ? "full" : "assignments",
         changedCount: compareAssignments(v.assignments, currentAssignments)
           .length,
       };
@@ -73,11 +113,18 @@ async function restoreVersion(db, data, versionId) {
     throw new Error(`No version with id ${versionId}`);
   }
   const version = snap.data();
-  return {
+  const restored = {
     ...data,
     assignments: deepCopy(version.assignments),
     layerSettings: deepCopy(version.layerSettings),
   };
+  if (version.scope === "full") {
+    for (const field of SETUP_FIELDS) {
+      if (version[field] !== undefined)
+        restored[field] = deepCopy(version[field]);
+    }
+  }
+  return restored;
 }
 
 /**
@@ -116,4 +163,10 @@ function deepCopy(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-export { saveVersion, listVersions, restoreVersion, compareAssignments };
+export {
+  saveVersion,
+  listVersions,
+  restoreVersion,
+  deleteVersion,
+  compareAssignments,
+};
