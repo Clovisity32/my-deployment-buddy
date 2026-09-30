@@ -11,7 +11,7 @@ const prepsLayer = {
   id: "preps",
   name: "Fewer preps",
   kind: "soft",
-  defaultWeight: 2,
+  defaultWeight: 0.5, // A bonus, not a priority: on the real deployment 0.5 cut total preps ~19% at no cost to load spread; 1+ trades spread for preps.
   describe() {
     return "Keep each teacher's number of different subjects (preps) as low as possible.";
   },

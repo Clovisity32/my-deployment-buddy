@@ -95,7 +95,7 @@ function renderLayers() {
               ? `
             <div class="weight-field">
               <label>Weight</label>
-              <input type="number" min="0" step="1" data-action="weight-layer" value="${esc(weight)}" />
+              <input type="number" min="0" step="0.5" data-action="weight-layer" value="${esc(weight)}" />
             </div>`
               : ""
           }
