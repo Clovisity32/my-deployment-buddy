@@ -24,7 +24,7 @@ function getHighs() {
 const DEFAULT_OPTIONS = {
   output_flag: false,
   random_seed: 1,
-  time_limit: 30, // seconds - a school-sized problem should solve in well under this
+  time_limit: 120, // seconds - the real school problem takes ~20s on a fast machine, so leave headroom for the school laptop
 };
 
 /**

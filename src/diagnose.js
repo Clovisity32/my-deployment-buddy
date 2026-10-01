@@ -340,7 +340,7 @@ async function diagnoseInfeasibility(data, model) {
   const result = highs.solve(lp, {
     output_flag: false,
     random_seed: 1,
-    time_limit: 30,
+    time_limit: 120,
   });
 
   if (result.Status !== "Optimal") {
