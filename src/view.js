@@ -12,6 +12,7 @@
 // load cap.
 
 import { effectiveCap } from "./data.js";
+import { BIG_PERIODS } from "./layers/mix.js";
 
 const CANONICAL_BLOCK_ORDER = ["LSS", "Chem", "Phy", "Bio"];
 
@@ -170,6 +171,7 @@ function buildSummary(data) {
  * @returns {{
  *   teacherId:string, name:string, roleName:string, cap:number, load:number,
  *   isPlaceholder:boolean, overCap:boolean,
+ *   big:number, small:number, preps:number, // group counts; big = BIG_PERIODS+ periods; preps = distinct subjects
  *   groups:{groupId:string, label:string, periods:number, locked:boolean}[],
  * }[]}
  */
@@ -195,9 +197,12 @@ function buildTeacherView(data) {
           label: g.label,
           periods: g.periods,
           locked: !!a?.locked,
+          subject: g.subjectId || g.block,
         };
       });
     const load = teacherGroups.reduce((sum, g) => sum + g.periods, 0);
+    const big = teacherGroups.filter((g) => g.periods >= BIG_PERIODS).length;
+    const preps = new Set(teacherGroups.map((g) => g.subject)).size;
 
     return {
       teacherId: t.id,
@@ -207,6 +212,9 @@ function buildTeacherView(data) {
       load,
       isPlaceholder: !!t.isPlaceholder,
       overCap: load > cap,
+      big,
+      small: teacherGroups.length - big,
+      preps,
       groups: teacherGroups,
     };
   });

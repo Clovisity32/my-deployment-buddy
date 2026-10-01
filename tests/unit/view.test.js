@@ -385,6 +385,40 @@ test("buildTeacherView() runs against the real sample school without throwing", 
   }
 });
 
+test("buildTeacherView() counts big (10+ periods) and small groups and distinct subjects (preps)", () => {
+  const mk = (id, subjectId, periods) => ({
+    id,
+    level: 3,
+    block: "Chem",
+    label: id,
+    periods,
+    teachersNeeded: 1,
+    subjectId,
+  });
+  const data = {
+    roles: [{ id: "teacher", name: "Teacher", maxPeriods: 60 }],
+    teachers: [
+      { id: "a", name: "Ann", roleId: "teacher", capOverride: null },
+      { id: "b", name: "Bob", roleId: "teacher", capOverride: null },
+    ],
+    groups: [
+      mk("g1", "G2_SCI_CHEM", 6),
+      mk("g2", "G2_SCI_CHEM", 6),
+      mk("g3", "G3_SCI_CHEM", 6),
+      mk("g4", "G3_PURE_CHEM", 10),
+    ],
+    assignments: [
+      { teacherId: "a", groupId: "g1" },
+      { teacherId: "a", groupId: "g2" },
+      { teacherId: "a", groupId: "g3" },
+      { teacherId: "a", groupId: "g4" },
+    ],
+  };
+  const [ann, bob] = buildTeacherView(data);
+  assert.deepEqual([ann.big, ann.small, ann.preps], [1, 3, 3]);
+  assert.deepEqual([bob.big, bob.small, bob.preps], [0, 0, 0]);
+});
+
 test("wouldExceedCap() flags a teacher who would go past their cap, not one with room", () => {
   const data = fixtureV2();
   // Dee (cap 5) is already at 6 periods; anyone else has cap 20.

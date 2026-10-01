@@ -198,7 +198,7 @@ function renderTeacherView() {
   container.innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Teacher</th><th>Role</th><th>Load</th><th>Groups</th></tr></thead>
+        <thead><tr><th>Teacher</th><th>Role</th><th>Load</th><th title="Groups with 10 or more periods">Big</th><th title="Groups with fewer than 10 periods">Small</th><th title="Number of different subjects taught">Preps</th><th>Groups</th></tr></thead>
         <tbody>
           ${rows
             .map((r) => {
@@ -214,6 +214,9 @@ function renderTeacherView() {
                   </div>
                   <div class="load-bar-track"><div class="load-bar-fill ${r.overCap ? "over" : ""}" style="width:${pct}%"></div></div>
                 </td>
+                <td>${esc(r.big)}</td>
+                <td>${esc(r.small)}</td>
+                <td>${esc(r.preps)}</td>
                 <td>${r.groups.map((g) => `${esc(g.label)}${g.locked ? " 🔒" : ""}`).join("<br />") || "<small>(none)</small>"}</td>
               </tr>
             `;
