@@ -76,41 +76,66 @@ async function signInAsHod(page, email = "hod@example.com") {
   // Drives the Auth emulator's real IDP Login Widget popup - it is not
   // auto-accepted. See Task 3's auth.spec.js comment for how this was
   // verified against the running emulator.
-  const popupPromise = page.context().waitForEvent("page");
-  await page.click("#sign-in-button");
-  const popup = await popupPromise;
-  await popup.waitForLoadState();
-  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
-  if ((await existing.count()) > 0) {
-    await existing.first().click();
-  } else {
-    await popup.click("#add-account-button");
-    await popup.fill("#email-input", email);
-    await popup.click("#sign-in");
+  //
+  // The widget occasionally never submits (popup stays open, no request
+  // sent, a second click does nothing); a fresh popup works, so retry up to 3
+  // times. The caller has already loaded the page, so only reload on a retry.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) await page.goto("/index.html?emulators=1");
+    const popupPromise = page.context().waitForEvent("page");
+    await page.click("#sign-in-button");
+    const popup = await popupPromise;
+    await popup.waitForLoadState();
+    const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+    if ((await existing.count()) > 0) {
+      await existing.first().click();
+    } else {
+      await popup.click("#add-account-button");
+      await popup.fill("#email-input", email);
+      await popup.click("#sign-in");
+    }
+    try {
+      await expect(page.locator("#app-shell")).toBeVisible({
+        timeout: attempt < 3 ? 4000 : 10000,
+      });
+      return;
+    } catch (err) {
+      if (attempt === 3) throw err;
+      await popup.close().catch(() => {});
+    }
   }
-  await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 
 // #load triggers signInWithGoogle() directly, which opens the Auth
 // emulator's real IDP Login Widget popup - it is not auto-accepted (see
 // Task 3's auth.spec.js comment for how this was verified).
 async function loadHarnessAndSignIn(page, email = "hod@example.com") {
-  await page.goto("/tests/e2e/fixtures/store-harness.html?emulators=1");
-  const popupPromise = page.context().waitForEvent("page");
-  await page.click("#load");
-  const popup = await popupPromise;
-  await popup.waitForLoadState();
-  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
-  if ((await existing.count()) > 0) {
-    await existing.first().click();
-  } else {
-    await popup.click("#add-account-button");
-    await popup.fill("#email-input", email);
-    await popup.click("#sign-in");
+  // Retry with a fresh popup if the emulator's login widget never submits
+  // (see signInAsHod above).
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.goto("/tests/e2e/fixtures/store-harness.html?emulators=1");
+    const popupPromise = page.context().waitForEvent("page");
+    await page.click("#load");
+    const popup = await popupPromise;
+    await popup.waitForLoadState();
+    const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+    if ((await existing.count()) > 0) {
+      await existing.first().click();
+    } else {
+      await popup.click("#add-account-button");
+      await popup.fill("#email-input", email);
+      await popup.click("#sign-in");
+    }
+    try {
+      await expect(page.locator("#data-out")).not.toHaveText("", {
+        timeout: attempt < 3 ? 4000 : 10000,
+      });
+      return;
+    } catch (err) {
+      if (attempt === 3) throw err;
+      await popup.close().catch(() => {});
+    }
   }
-  await expect(page.locator("#data-out")).not.toHaveText("", {
-    timeout: 10000,
-  });
 }
 
 test("initStore() loads the current doc and setData() writes it back with a 'saved' status", async ({
