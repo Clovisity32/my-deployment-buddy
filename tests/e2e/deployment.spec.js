@@ -6,20 +6,34 @@ import { test, expect } from "@playwright/test";
  * verified against the running emulator.
  */
 async function signInAsHod(page, email = "hod@example.com") {
-  await page.goto("/index.html?emulators=1");
-  const popupPromise = page.context().waitForEvent("page");
-  await page.click("#sign-in-button");
-  const popup = await popupPromise;
-  await popup.waitForLoadState();
-  const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
-  if ((await existing.count()) > 0) {
-    await existing.first().click();
-  } else {
-    await popup.click("#add-account-button");
-    await popup.fill("#email-input", email);
-    await popup.click("#sign-in");
+  // The emulator's login widget occasionally (mostly on cold runs) never
+  // submits - the popup just sits there after "Sign in" with no network
+  // request sent, and clicking again doesn't help. A fresh popup does, so
+  // retry the whole popup flow a few times before giving up.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.goto("/index.html?emulators=1");
+    const popupPromise = page.context().waitForEvent("page");
+    await page.click("#sign-in-button");
+    const popup = await popupPromise;
+    await popup.waitForLoadState();
+    const existing = popup.locator(`.js-reuse-account:has-text("${email}")`);
+    if ((await existing.count()) > 0) {
+      await existing.first().click();
+    } else {
+      await popup.click("#add-account-button");
+      await popup.fill("#email-input", email);
+      await popup.click("#sign-in");
+    }
+    try {
+      await expect(page.locator("#app-shell")).toBeVisible({
+        timeout: attempt < 3 ? 4000 : 10000,
+      });
+      return;
+    } catch (err) {
+      if (attempt === 3) throw err;
+      await popup.close().catch(() => {});
+    }
   }
-  await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
 }
 
 /**
@@ -59,8 +73,17 @@ async function loadSample(page) {
     { method: "DELETE" },
   );
   await signInAsHod(page);
-  await page.click("#btn-load-sample");
-  await expect(page.locator("#table-teachers tbody tr")).toHaveCount(10);
+  // #app-shell becomes visible before src/ui.js has awaited initStore() and
+  // wired the buttons (onSignedIn() unhides the shell first), so an
+  // immediate click can land on an unwired button and do nothing - worst on
+  // a cold first run. Re-click until the sample actually shows up; loading
+  // the sample twice is harmless.
+  await expect(async () => {
+    await page.click("#btn-load-sample");
+    await expect(page.locator("#table-teachers tbody tr")).toHaveCount(10, {
+      timeout: 1500,
+    });
+  }).toPass({ timeout: 15000 });
 }
 
 async function solve(page) {
@@ -222,6 +245,9 @@ test.describe("My Deployment Buddy", () => {
     await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
     await expect(page.locator("#solve-status")).toBeEmpty();
 
+    // The shell shows before initStore() resolves, so getData() is null for a
+    // moment after a reload - wait for the load to finish.
+    await expect.poll(() => readStoredData(page)).not.toBeNull();
     const after = await readStoredData(page);
     const key = (d) =>
       new Set(d.assignments.map((a) => `${a.teacherId}|${a.groupId}`));
@@ -254,32 +280,6 @@ test.describe("My Deployment Buddy", () => {
     expect(t9.capOverride).toBeFalsy();
   });
 
-  test("deleting a band that drops assignments shows a status message on the Bands tab", async ({
-    page,
-  }) => {
-    await loadSample(page);
-    await solve(page);
-
-    await page.click('nav.tabs button[data-tab="bands"]');
-    const bandCard = page.locator('.band-card[data-id="b-403-405"]');
-    await expect(bandCard).toBeVisible();
-    await bandCard.locator('button[data-action="delete-band"]').click();
-
-    await expect(page.locator("#bands-status")).toContainText(
-      "assignment(s) were removed because their group no longer exists",
-    );
-  });
-
-  test("typing a band name keystroke-by-keystroke doesn't lose focus after each character", async ({
-    page,
-  }) => {
-    await loadSample(page);
-
-    await page.click('nav.tabs button[data-tab="bands"]');
-    const nameInput = page.locator(
-      '.band-card[data-id="b-403-405"] input[data-field="name"]',
-    );
-    await nameInput.click();
   test("a teacher's max groups and exact big/small counts can be set, cleared, and are honoured by Solve", async ({
     page,
   }) => {
@@ -309,6 +309,32 @@ test.describe("My Deployment Buddy", () => {
     expect(t1.maxGroups).toBeNull();
   });
 
+  test("deleting a band that drops assignments shows a status message on the Bands tab", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await solve(page);
+
+    await page.click('nav.tabs button[data-tab="bands"]');
+    const bandCard = page.locator('.band-card[data-id="b-403-405"]');
+    await expect(bandCard).toBeVisible();
+    await bandCard.locator('button[data-action="delete-band"]').click();
+
+    await expect(page.locator("#bands-status")).toContainText(
+      "assignment(s) were removed because their group no longer exists",
+    );
+  });
+
+  test("typing a band name keystroke-by-keystroke doesn't lose focus after each character", async ({
+    page,
+  }) => {
+    await loadSample(page);
+
+    await page.click('nav.tabs button[data-tab="bands"]');
+    const nameInput = page.locator(
+      '.band-card[data-id="b-403-405"] input[data-field="name"]',
+    );
+    await nameInput.click();
     await nameInput.fill("");
     // pressSequentially dispatches one real keystroke (and one "input"
     // event) at a time - unlike fill(), which sets the whole value in one
