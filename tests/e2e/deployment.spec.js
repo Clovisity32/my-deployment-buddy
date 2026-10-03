@@ -73,17 +73,11 @@ async function loadSample(page) {
     { method: "DELETE" },
   );
   await signInAsHod(page);
-  // #app-shell becomes visible before src/ui.js has awaited initStore() and
-  // wired the buttons (onSignedIn() unhides the shell first), so an
-  // immediate click can land on an unwired button and do nothing - worst on
-  // a cold first run. Re-click until the sample actually shows up; loading
-  // the sample twice is harmless.
-  await expect(async () => {
-    await page.click("#btn-load-sample");
-    await expect(page.locator("#table-teachers tbody tr")).toHaveCount(10, {
-      timeout: 1500,
-    });
-  }).toPass({ timeout: 15000 });
+  // #app-shell is only revealed once initStore() has resolved and the
+  // buttons are wired (see onSignedIn() in src/ui.js), so this click is safe
+  // as soon as signInAsHod() returns.
+  await page.click("#btn-load-sample");
+  await expect(page.locator("#table-teachers tbody tr")).toHaveCount(10);
 }
 
 async function solve(page) {
@@ -245,9 +239,6 @@ test.describe("My Deployment Buddy", () => {
     await expect(page.locator("#app-shell")).toBeVisible({ timeout: 10000 });
     await expect(page.locator("#solve-status")).toBeEmpty();
 
-    // The shell shows before initStore() resolves, so getData() is null for a
-    // moment after a reload - wait for the load to finish.
-    await expect.poll(() => readStoredData(page)).not.toBeNull();
     const after = await readStoredData(page);
     const key = (d) =>
       new Set(d.assignments.map((a) => `${a.teacherId}|${a.groupId}`));

@@ -407,14 +407,15 @@ function renderSaveStatus({ status, message }) {
 let wired = false;
 
 async function onSignedIn(user) {
-  document.getElementById("sign-in-screen").hidden = true;
+  const signInScreen = document.getElementById("sign-in-screen");
   const shell = document.getElementById("app-shell");
-  shell.hidden = false;
   document.getElementById("current-user-email").textContent = user.email;
 
   try {
     await initStore();
   } catch (err) {
+    signInScreen.hidden = true;
+    shell.hidden = false;
     // A native alert() would never be visible to a test asserting on page
     // content (Task 9's "unauthorized email" test checks page body text) -
     // and a signed-in-but-denied user (wrong email, or Firestore briefly
@@ -446,6 +447,13 @@ async function onSignedIn(user) {
     );
   }
   renderAll();
+
+  // Reveal the app only once the data has loaded and every button is wired,
+  // so a click that lands the instant the shell appears can't hit a dead
+  // button (or read data that hasn't loaded yet). The error path above
+  // reveals the shell itself, because it needs #save-status to be visible.
+  signInScreen.hidden = true;
+  shell.hidden = false;
 }
 
 function onSignedOut() {
