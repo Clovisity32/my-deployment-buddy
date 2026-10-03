@@ -330,6 +330,16 @@ function setupWarnings(data) {
         }
       }
     });
+
+    // Exact big + small counts that already exceed the teacher's own max.
+    teachers.forEach((teacher) => {
+      const fixed = (teacher.bigCount ?? 0) + (teacher.smallCount ?? 0);
+      if (typeof teacher.maxGroups === "number" && fixed > teacher.maxGroups) {
+        warnings.push(
+          `Teacher "${teacher.name}" has ${fixed} big and small group(s) set, which is more than their maximum of ${teacher.maxGroups} group(s).`,
+        );
+      }
+    });
   } catch {
     // never throw — return whatever we'd collected so far.
   }

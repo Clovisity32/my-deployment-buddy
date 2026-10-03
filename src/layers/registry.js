@@ -31,6 +31,7 @@
 import { coverageLayer } from "./coverage.js";
 import { qualificationLayer } from "./qualification.js";
 import { loadCapLayer } from "./loadCap.js";
+import { groupCountLayer } from "./groupCount.js";
 import { pinLayer } from "./pin.js";
 import { bandClashLayer } from "./bandClash.js";
 import { stableLayer } from "./stable.js";
@@ -44,6 +45,7 @@ const LAYERS = [
   coverageLayer,
   qualificationLayer,
   loadCapLayer,
+  groupCountLayer,
   pinLayer,
   bandClashLayer,
   balanceLayer,

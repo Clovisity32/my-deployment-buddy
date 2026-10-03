@@ -8,7 +8,7 @@
 /** @typedef {{subjectId:string, groups:number}} BandSubject */
 /** @typedef {{id:string, name:string, classIds:string[], subjects:BandSubject[], note:string}} Band */
 /** @typedef {{label?:string, teachersNeeded?:number, note?:string}} GroupOverride */
-/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean}} Teacher */
+/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean, bigCount?:number|null, smallCount?:number|null, maxGroups?:number|null}} Teacher */
 /**
  * @typedef {{
  *   id:string, level:number, block:string, label:string, periods:number,
@@ -281,6 +281,17 @@ function validate(data) {
         !Array.isArray(t.qualifications)
       )
         errors.push(`teachers[${i}].qualifications must be an array.`);
+      for (const field of ["bigCount", "smallCount", "maxGroups"]) {
+        const v = t[field];
+        if (
+          typeof v !== "undefined" &&
+          v !== null &&
+          !(typeof v === "number" && Number.isInteger(v) && v >= 0)
+        )
+          errors.push(
+            `teachers[${i}].${field} must be a whole number >= 0 or null.`,
+          );
+      }
     });
 
     // Cross-reference: a teacher's roleId should point at a real role, but

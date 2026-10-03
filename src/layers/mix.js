@@ -27,6 +27,10 @@ const mixLayer = {
     let n = 0;
     for (const t of ctx.data.teachers) {
       if (t.isPlaceholder) continue;
+      // The HOD fixed this teacher's big/small counts by hand (groupCount
+      // layer), so there is no mix left for the solver to balance.
+      if (typeof t.bigCount === "number" || typeof t.smallCount === "number")
+        continue;
       const big = [];
       const small = [];
       for (const g of ctx.data.groups) {

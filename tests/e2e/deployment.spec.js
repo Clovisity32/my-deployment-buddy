@@ -280,6 +280,35 @@ test.describe("My Deployment Buddy", () => {
       '.band-card[data-id="b-403-405"] input[data-field="name"]',
     );
     await nameInput.click();
+  test("a teacher's max groups and exact big/small counts can be set, cleared, and are honoured by Solve", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await page.click('nav.tabs button[data-tab="teachers"]');
+    const row = page.locator('#table-teachers tr[data-id="t1"]');
+
+    await row.locator('input[data-field="maxGroups"]').fill("3");
+    await row.locator('input[data-field="bigCount"]').fill("1");
+    await row.locator('input[data-field="smallCount"]').fill("0");
+    let t1 = (await readStoredData(page)).teachers.find((t) => t.id === "t1");
+    expect([t1.maxGroups, t1.bigCount, t1.smallCount]).toEqual([3, 1, 0]);
+
+    await solve(page);
+    const data = await readStoredData(page);
+    const groupById = new Map(data.groups.map((g) => [g.id, g]));
+    const mine = data.assignments
+      .filter((a) => a.teacherId === "t1")
+      .map((a) => groupById.get(a.groupId));
+    expect(mine.length).toBeLessThanOrEqual(3);
+    expect(mine.filter((g) => g.periods >= 10).length).toBe(1);
+    expect(mine.filter((g) => g.periods < 10).length).toBe(0);
+
+    await page.click('nav.tabs button[data-tab="teachers"]');
+    await row.locator('input[data-field="maxGroups"]').fill("");
+    t1 = (await readStoredData(page)).teachers.find((t) => t.id === "t1");
+    expect(t1.maxGroups).toBeNull();
+  });
+
     await nameInput.fill("");
     // pressSequentially dispatches one real keystroke (and one "input"
     // event) at a time - unlike fill(), which sets the whole value in one

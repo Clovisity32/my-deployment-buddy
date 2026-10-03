@@ -5,6 +5,9 @@
 import { getData, setData } from "./store.js";
 import { esc, genId, isBlankNumberInput } from "./dom.js";
 
+// Optional per-teacher group-count rules; blank = no rule (stored as null).
+const COUNT_FIELDS = ["bigCount", "smallCount", "maxGroups"];
+
 function renderTeachers() {
   renderRoles();
   renderTeacherTable();
@@ -40,7 +43,7 @@ function renderTeacherTable() {
 
   if ((data.teachers || []).length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="5">No teachers yet - add one, or load the sample school.</td></tr>';
+      '<tr><td colspan="8">No teachers yet - add one, or load the sample school.</td></tr>';
     return;
   }
 
@@ -60,6 +63,7 @@ function renderTeacherTable() {
           </select>
         </td>
         <td>${capCell}</td>
+        ${COUNT_FIELDS.map((f) => `<td><input data-field="${f}" data-blank-ok type="number" min="0" step="1" placeholder="any" style="width:5em" value="${esc(t[f] ?? "")}" /></td>`).join("")}
         <td style="text-align:center"><input data-field="isPlaceholder" type="checkbox" ${t.isPlaceholder ? "checked" : ""} /></td>
         <td><button data-action="delete-teacher" title="Remove teacher">×</button></td>
       </tr>
@@ -174,6 +178,9 @@ function wireTeacherTable() {
           name: "",
           roleId: firstRole ? firstRole.id : "",
           capOverride: null,
+          bigCount: null,
+          smallCount: null,
+          maxGroups: null,
           qualifications: [],
           isPlaceholder: false,
         },
@@ -199,11 +206,13 @@ function wireTeacherTable() {
     const data = getData();
     const teachers = data.teachers.map((t) => {
       if (t.id !== id) return t;
-      if (field === "capOverride")
+      if (field === "capOverride" || COUNT_FIELDS.includes(field))
         return {
           ...t,
-          capOverride:
-            e.target.value === "" ? null : Number(e.target.value) || 0,
+          [field]:
+            e.target.value === ""
+              ? null
+              : Math.max(0, Math.floor(Number(e.target.value) || 0)),
         };
       return { ...t, [field]: e.target.value };
     });

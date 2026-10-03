@@ -744,6 +744,11 @@
       "weight": 1
     },
     {
+      "id": "groupCount",
+      "enabled": true,
+      "weight": 1
+    },
+    {
       "id": "pin",
       "enabled": true,
       "weight": 1

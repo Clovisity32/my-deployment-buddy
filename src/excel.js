@@ -135,6 +135,9 @@ function dataToSheets(data) {
       name: t.name,
       roleId: t.roleId,
       capOverride: t.capOverride ?? "",
+      bigCount: t.bigCount ?? "",
+      smallCount: t.smallCount ?? "",
+      maxGroups: t.maxGroups ?? "",
       qualifications: (t.qualifications || []).join(SUBJECT_SEPARATOR),
       isPlaceholder: Boolean(t.isPlaceholder),
     })),
@@ -255,6 +258,9 @@ function sheetsToData(sheets) {
         ? null
         : toNumber(row.capOverride),
     qualifications: splitList(row.qualifications),
+    ...optionalCount(row, "bigCount"),
+    ...optionalCount(row, "smallCount"),
+    ...optionalCount(row, "maxGroups"),
     ...(toBool(row.isPlaceholder) ? { isPlaceholder: true } : {}),
   }));
 
@@ -313,6 +319,13 @@ function toNumber(v) {
   if (typeof v === "number") return v;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+// A blank cell means "no rule", so the field is left off the teacher entirely
+// (same as an absent field, which validate()/groupCount treat as no rule).
+function optionalCount(row, field) {
+  const v = row[field];
+  return v === "" || v == null ? {} : { [field]: toNumber(v) };
 }
 
 function toBool(v) {

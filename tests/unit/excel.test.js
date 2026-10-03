@@ -109,6 +109,31 @@ test("sheetsToData() round-trips a locked assignment, a null band, and an empty 
   assert.deepEqual(sheetsToData(dataToSheets(data)), data);
 });
 
+test("sheetsToData() round-trips per-teacher big/small/max group counts, including 0", () => {
+  const data = minimalData({
+    teachers: [
+      {
+        id: "t1",
+        name: "Amy",
+        roleId: "teacher",
+        capOverride: null,
+        qualifications: [],
+        bigCount: 2,
+        smallCount: 0,
+        maxGroups: 5,
+      },
+      {
+        id: "t2",
+        name: "Bob",
+        roleId: "teacher",
+        capOverride: null,
+        qualifications: [],
+      },
+    ],
+  });
+  assert.deepEqual(sheetsToData(dataToSheets(data)), data);
+});
+
 test("sheetsToData() round-trips a version snapshot (nested assignments/layerSettings)", () => {
   const data = minimalData({
     versions: [

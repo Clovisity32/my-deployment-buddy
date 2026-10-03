@@ -11,6 +11,8 @@
 
 import { getHighs } from "./solve.js";
 import { effectiveCap } from "./data.js";
+import { BIG_PERIODS } from "./layers/mix.js";
+import { isSet } from "./layers/groupCount.js";
 
 /**
  * Fast, solver-free checks for the most common and clearest infeasibility
@@ -101,6 +103,37 @@ function preCheck(data, model) {
   }
   if (issues.length > 0) return issues;
 
+  // 2b. A teacher's exact big/small count that exceeds how many such groups
+  //     they are even eligible for (model.pairs is already qualification-
+  //     filtered), or a big+small total above their own max-groups limit.
+  const eligible = new Map(); // teacherId -> { big, small }
+  for (const p of model.pairs) {
+    const g = groupById.get(p.groupId);
+    if (!g) continue;
+    if (!eligible.has(p.teacherId))
+      eligible.set(p.teacherId, { big: 0, small: 0 });
+    eligible.get(p.teacherId)[g.periods >= BIG_PERIODS ? "big" : "small"]++;
+  }
+  for (const t of data.teachers) {
+    const have = eligible.get(t.id) || { big: 0, small: 0 };
+    if (isSet(t.bigCount) && t.bigCount > have.big)
+      issues.push(
+        `"${t.name}" is set to ${t.bigCount} big group(s) (${BIG_PERIODS}+ periods), but is only qualified for ${have.big}. Lower the number or add qualifications.`,
+      );
+    if (isSet(t.smallCount) && t.smallCount > have.small)
+      issues.push(
+        `"${t.name}" is set to ${t.smallCount} small group(s), but is only qualified for ${have.small}. Lower the number or add qualifications.`,
+      );
+    if (
+      isSet(t.maxGroups) &&
+      (t.bigCount ?? 0) + (t.smallCount ?? 0) > t.maxGroups
+    )
+      issues.push(
+        `"${t.name}" has ${(t.bigCount ?? 0) + (t.smallCount ?? 0)} big and small group(s) set, which is more than their maximum of ${t.maxGroups} group(s).`,
+      );
+  }
+  if (issues.length > 0) return issues;
+
   // 3. Overall: total demand across every group vs. total capacity across
   //    every teacher (catches an across-the-board overload the per-subject
   //    check can miss if periods are unevenly distributed).
@@ -121,7 +154,13 @@ function preCheck(data, model) {
   return issues;
 }
 
-const HARD_PREFIXES = ["coverage_", "loadCap_", "pin_", "bandClash_"];
+const HARD_PREFIXES = [
+  "coverage_",
+  "loadCap_",
+  "groupCount_",
+  "pin_",
+  "bandClash_",
+];
 
 function isHardConstraint(name) {
   return HARD_PREFIXES.some((p) => name.startsWith(p));
@@ -276,6 +315,18 @@ function explainConstraint(constraintName, data, slackValue) {
     return t
       ? `"${t.name}" would need ${rounded} period(s) more than their cap of ${effectiveCap(data, t)} to satisfy the other requirements (often caused by a locked assignment).`
       : `Teacher "${teacherId}"'s load cap could not be respected.`;
+  }
+  if (constraintName.startsWith("groupCount_")) {
+    // Name is "groupCount_<max|big|small>_<teacherId>".
+    const rest = constraintName.slice("groupCount_".length);
+    const kind = ["max", "big", "small"].find((k) => rest.startsWith(`${k}_`));
+    const t = kind && teacherById.get(rest.slice(kind.length + 1));
+    if (!t) return "A teacher's group-count setting could not be respected.";
+    if (kind === "max")
+      return `"${t.name}" would need ${rounded} group(s) more than their maximum of ${t.maxGroups} to satisfy the other requirements (often caused by a locked assignment).`;
+    const n = kind === "big" ? t.bigCount : t.smallCount;
+    const label = kind === "big" ? `big (${BIG_PERIODS}+ periods)` : "small";
+    return `"${t.name}" is set to exactly ${n} ${label} group(s), but the other requirements can't allow that. Change the number or clear it.`;
   }
   if (constraintName.startsWith("pin_")) {
     // Name is "pin_<teacherId>_<groupId>". Ids may themselves contain
