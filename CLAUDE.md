@@ -27,6 +27,11 @@ rationale.
 - **Re-opening never re-solves.** Loading a saved Excel file or restoring a
   version must reproduce the exact same assignments — never trigger a fresh
   solve. Only the "Solve" button solves.
+- **The Board owns the group list.** Once any group is edited on the Board
+  (`data.groupsFrozen`), edits on Subjects/Classes/Bands no longer regenerate
+  `data.groups`; only the confirmed "Rebuild groups from setup" button does
+  (`applySetupEdit()` / `rebuildFromSetup()`). Group names are auto-built from
+  level, subject, stream and classes unless typed by hand (`manualLabel`).
 - **The HiGHS solve itself runs entirely offline.** HiGHS WASM is vendored
   in `src/vendor/highs/` (copied from `node_modules/highs/build/`, not
   imported live) so solving never needs a network call. The app as a
@@ -100,6 +105,8 @@ changes.
 | `src/auth.js`            | Google Sign-In wrapper (Firebase Auth). Gates app boot.                                                                                                 |
 | `src/ui/store.js`        | Single source of truth for in-memory `data`, backed by Firestore (`deployments/main`), with an optimistic-local + transactional overwrite guard.        |
 | `src/versions.js`        | Saved-version snapshots, stored in the `deployments/main/versions` Firestore subcollection.                                                             |
+| `src/board.js`           | Pure Board logic: group names, board and tally read-models, group and seat edit operations (`{ data, error }`). Unit-testable without a browser.        |
+| `src/ui/board.js`        | Board tab: rendering, drag-and-drop, undo/redo, toasts. Decisions live in `src/board.js`.                                                               |
 | `sample/sample.json`     | Fictional school mirroring the real sheet's structure (bands, co-teaching, a placeholder teacher) — used by tests and as the demo/reset data in the UI. |
 | `firestore.rules`        | Security rules restricting all access to the two-email allowlist.                                                                                       |
 
