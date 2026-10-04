@@ -537,6 +537,14 @@
       .size-badge.big {
         background: #fde8e8;
       }
+      .team-badge {
+        font-size: 11px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-left: 4px;
+        background: #e8f0fe;
+      }
       .row-note {
         font-size: 12px;
         color: var(--muted);
@@ -1003,12 +1011,20 @@
             >
               &#8631; Redo change
             </button>
+            <button
+              data-action="apply-continuity"
+              class="secondary"
+              title="Lock last year's teacher on their class for Sec 1 to 2 and Sec 3 to 4"
+            >
+              Lock last year's teachers
+            </button>
             <button id="btn-solve-board" class="primary">Solve</button>
             <button data-action="print" title="Print this board">
               Print board
             </button>
           </div>
           <div id="board-solve-status"></div>
+          <div id="board-continuity-report"></div>
           <div id="board-summary"></div>
           <div class="board-layout">
             <div id="board-body"></div>

@@ -225,3 +225,63 @@ test.describe("Intake", () => {
     await expect(c.locator('[data-action="intake-save"]')).toBeDisabled();
   });
 });
+
+test("Apply continuity locks last year's teacher on the Board and reports what it skipped", async ({
+  page,
+}) => {
+  await loadSample(page);
+  await writeStoredData(page, (d) => ({
+    ...d,
+    lastYear: [
+      { level: 1, classRef: "101", subjectId: "G1_LSS", teacherId: "t1" }, // -> Sec 2 G1 LSS group
+      { level: 1, classRef: "199", subjectId: "G1_LSS", teacherId: "t1" }, // no such class
+    ],
+  }));
+  await openBoard(page);
+  page.once("dialog", (dialog) => {
+    expect(dialog.message()).toContain("Lock 1 placement");
+    dialog.accept();
+  });
+  await page.click('[data-action="apply-continuity"]');
+  await expect(page.locator("#board-toast")).toContainText(
+    "Locked 1 placement",
+  );
+  await expect(page.locator("#board-continuity-report")).toContainText(
+    "no Sec 2 class matches",
+  );
+  const data = await readStoredData(page);
+  expect(data.assignments).toContainEqual({
+    teacherId: "t1",
+    groupId: "g_G1_LSS_b-2",
+    locked: true,
+  });
+});
+
+test("Apply continuity with nothing loaded says what to do next", async ({
+  page,
+}) => {
+  await loadSample(page);
+  await writeStoredData(page, (d) => ({ ...d, lastYear: [] }));
+  await openBoard(page);
+  await page.click('[data-action="apply-continuity"]');
+  await expect(page.locator("#board-toast")).toContainText(
+    "Last year's teachers",
+  );
+});
+
+test("a team-taught group is marked on the Board", async ({ page }) => {
+  await loadSample(page);
+  await writeStoredData(page, (d) => ({
+    ...d,
+    groups: d.groups.map((g) =>
+      g.id === "g_G1_LSS_b-2" ? { ...g, teachersNeeded: 2 } : g,
+    ),
+  }));
+  await openBoard(page);
+  await expect(
+    page.locator('[data-group-id="g_G1_LSS_b-2"] .team-badge'),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-group-id="g_G2_LSS_b-2"] .team-badge'),
+  ).toHaveCount(0);
+});

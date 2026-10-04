@@ -8,6 +8,7 @@ import { esc, genId } from "./dom.js";
 import { bigThreshold } from "../data.js";
 import { createHistory } from "../history.js";
 import { blockFromDiscipline } from "../setup.js";
+import { applyContinuity } from "../continuity.js";
 import {
   buildBoard,
   buildTally,
@@ -239,7 +240,7 @@ function renderRow(data, row, tallyById, card) {
       <div class="row-main">
         <span class="row-name">${esc(row.name)}</span>
         <button class="icon" data-action="toggle-details" data-group-id="${esc(row.groupId)}" aria-label="More options for ${esc(row.name)}" title="More options">&#8943;</button>
-        <span class="row-meta">${esc(row.periods)}p <span class="size-badge ${row.isBig ? "big" : ""}">${row.isBig ? "BIG" : "sm"}</span></span>
+        <span class="row-meta">${esc(row.periods)}p <span class="size-badge ${row.isBig ? "big" : ""}">${row.isBig ? "BIG" : "sm"}</span>${row.teachersNeeded > 1 ? '<span class="team-badge" title="Team-taught: each teacher carries the full periods">&#8644; team</span>' : ""}</span>
       </div>
       <div class="row-seats">${seats}</div>
       ${row.note ? `<div class="row-note">${esc(row.note)}</div>` : ""}
@@ -403,6 +404,42 @@ function wireBoard() {
       redo();
     } else if (action === "print") {
       window.print();
+    } else if (action === "apply-continuity") {
+      const report = document.getElementById("board-continuity-report");
+      const res = applyContinuity(data);
+      const lines = res.skipped
+        .map((s) => `<li>${esc(s.message)}</li>`)
+        .join("");
+      if (res.added === 0) {
+        if (report)
+          report.innerHTML = lines ? `<ul class="problems">${lines}</ul>` : "";
+        toast(
+          res.skipped.length > 0
+            ? "Nothing could be locked - see the reasons below the toolbar."
+            : "No last-year teachers to lock yet. Add them under Teachers → Intake from Excel → Last year's teachers.",
+          "error",
+        );
+        return;
+      }
+      if (
+        !confirm(
+          `Lock ${res.added} placement(s) from last year (Sec 1 to 2 and Sec 3 to 4)?
+
+${res.skipped.length} will be skipped. Seats you have already placed are left as they are.`,
+        )
+      )
+        return;
+      if (
+        commit(
+          { data: res.data, error: null },
+          `Locked ${res.added} placement(s) from last year. ${res.skipped.length} skipped.`,
+        )
+      ) {
+        if (report)
+          report.innerHTML = lines
+            ? `<p>Skipped:</p><ul class="problems">${lines}</ul>`
+            : "";
+      }
     } else if (action === "toggle-details") {
       openDetailsId = openDetailsId === id ? "" : id;
       renderBoard();
