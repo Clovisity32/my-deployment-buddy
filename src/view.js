@@ -11,7 +11,7 @@
 // for effectiveCap(), which is the single source of truth for a teacher's
 // load cap.
 
-import { effectiveCap, bigThreshold } from "./data.js";
+import { effectiveCap, bigThreshold, prepKey } from "./data.js";
 
 const CANONICAL_BLOCK_ORDER = ["LSS", "Chem", "Phy", "Bio"];
 
@@ -170,7 +170,7 @@ function buildSummary(data) {
  * @returns {{
  *   teacherId:string, name:string, roleName:string, cap:number, load:number,
  *   isPlaceholder:boolean, overCap:boolean,
- *   big:number, small:number, preps:number, // group counts; big = bigThreshold(data)+ periods; preps = distinct subjects
+ *   big:number, small:number, preps:number, // group counts; big = bigThreshold(data)+ periods; preps = distinct subject + stream + level
  *   groups:{groupId:string, label:string, periods:number, locked:boolean}[],
  * }[]}
  */
@@ -197,12 +197,12 @@ function buildTeacherView(data) {
           label: g.label,
           periods: g.periods,
           locked: !!a?.locked,
-          subject: g.subjectId || g.block,
+          prep: prepKey(g),
         };
       });
     const load = teacherGroups.reduce((sum, g) => sum + g.periods, 0);
     const big = teacherGroups.filter((g) => g.periods >= threshold).length;
-    const preps = new Set(teacherGroups.map((g) => g.subject)).size;
+    const preps = new Set(teacherGroups.map((g) => g.prep)).size;
 
     return {
       teacherId: t.id,

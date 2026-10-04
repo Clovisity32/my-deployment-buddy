@@ -36,6 +36,15 @@ test("generateClasses() preserves an existing class's edited name and subjectIds
   assert.deepEqual(c102.subjectIds, []);
 });
 
+test("generateClasses() keeps other fields (formTeacherId) when re-generating", () => {
+  const existing = [
+    { id: "301", level: 3, name: "Curiosity", subjectIds: [], formTeacherId: "t1" },
+  ];
+  const classes = generateClasses({ 3: 2 }, defaultClassNames(), existing);
+  assert.equal(classes.find((c) => c.id === "301").formTeacherId, "t1");
+  assert.equal("formTeacherId" in classes.find((c) => c.id === "302"), false);
+});
+
 test("generateClasses() shrinking the count drops trailing classes", () => {
   const existing = [
     { id: "101", level: 1, name: "A", subjectIds: [] },
