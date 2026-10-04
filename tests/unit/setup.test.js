@@ -7,6 +7,7 @@ import {
   generateGroups,
   setupWarnings,
   rebuildGroups,
+  applySetupEdit,
 } from "../../src/setup.js";
 
 // --- generateClasses --------------------------------------------------------
@@ -325,4 +326,35 @@ test("rebuildGroups() drops groupOverrides entries whose group id no longer exis
   assert.deepEqual(newData.groupOverrides, {
     g_G2_SCI_CHEM_302: { note: "surviving group note" },
   });
+});
+
+// --- applySetupEdit ----------------------------------------------------------
+
+test("applySetupEdit() leaves groups alone once the board owns them", () => {
+  const data = {
+    subjects: [],
+    classes: [],
+    bands: [],
+    groups: [{ id: "keep" }],
+    assignments: [],
+    groupsFrozen: true,
+  };
+  const out = applySetupEdit(data);
+  assert.equal(out.frozen, true);
+  assert.equal(out.data, data);
+  assert.equal(out.droppedCount, 0);
+});
+
+test("applySetupEdit() still rebuilds groups before the board has taken over", () => {
+  const data = {
+    subjects: [],
+    classes: [],
+    bands: [],
+    groups: [{ id: "stale" }],
+    assignments: [{ groupId: "stale", teacherId: "t", locked: false }],
+  };
+  const out = applySetupEdit(data);
+  assert.equal(out.frozen, false);
+  assert.deepEqual(out.data.groups, []);
+  assert.equal(out.droppedCount, 1);
 });

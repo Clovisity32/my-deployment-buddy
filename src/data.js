@@ -14,13 +14,29 @@
  *   id:string, level:number, block:string, label:string, periods:number,
  *   band:string|null, teachersNeeded:number, category:string, note:string,
  *   subjectId?:string|null, discipline?:string, stream?:string,
- *   classIds?:string[], bandId?:string|null
+ *   classIds?:string[], bandId?:string|null, manualLabel?:boolean
  * }} Group
  */
 /** @typedef {Group & {subjectId:string|null}} CustomGroup */
 /** @typedef {{groupId:string, teacherId:string, locked:boolean}} Assignment */
 /** @typedef {{id:string, enabled:boolean, weight:number}} LayerSetting */
 /** @typedef {{name:string, timestamp:string, assignments:Assignment[], layerSettings:LayerSetting[]}} Version */
+
+const DEFAULT_BIG_PERIODS = 10;
+
+/**
+ * Periods at or above which a group counts as "big". The HOD can change it
+ * (data.settings.bigPeriods); anything that isn't a positive number falls back
+ * to the default so old files behave exactly as before.
+ * @param {any} data
+ * @returns {number}
+ */
+function bigThreshold(data) {
+  const n = data?.settings?.bigPeriods;
+  return typeof n === "number" && Number.isFinite(n) && n >= 1
+    ? n
+    : DEFAULT_BIG_PERIODS;
+}
 
 /** Canonical empty state. */
 function emptyData() {
@@ -110,6 +126,11 @@ function validateGroupShape(g, i, arrayName, errors, seenIds) {
     typeof g.bandId !== "string"
   )
     errors.push(`${arrayName}[${i}].bandId must be a string or null.`);
+  if (
+    typeof g.manualLabel !== "undefined" &&
+    typeof g.manualLabel !== "boolean"
+  )
+    errors.push(`${arrayName}[${i}].manualLabel must be true or false.`);
 }
 
 /**
@@ -373,6 +394,30 @@ function validate(data) {
     }
   }
 
+  if (
+    typeof data.groupsFrozen !== "undefined" &&
+    typeof data.groupsFrozen !== "boolean"
+  )
+    errors.push("groupsFrozen must be true or false.");
+  if (typeof data.settings !== "undefined") {
+    if (
+      !data.settings ||
+      typeof data.settings !== "object" ||
+      Array.isArray(data.settings)
+    ) {
+      errors.push("settings must be an object.");
+    } else if (
+      typeof data.settings.bigPeriods !== "undefined" &&
+      !(
+        typeof data.settings.bigPeriods === "number" &&
+        Number.isInteger(data.settings.bigPeriods) &&
+        data.settings.bigPeriods >= 1
+      )
+    ) {
+      errors.push("settings.bigPeriods must be a whole number of 1 or more.");
+    }
+  }
+
   // Cross-reference checks only if both arrays are structurally valid so far.
   if (Array.isArray(teachers) && Array.isArray(groups)) {
     const teacherIds = new Set(teachers.map((t) => t && t.id).filter(Boolean));
@@ -484,4 +529,11 @@ function migrateV1(data) {
   };
 }
 
-export { emptyData, validate, migrateV1, effectiveCap };
+export {
+  emptyData,
+  validate,
+  migrateV1,
+  effectiveCap,
+  bigThreshold,
+  DEFAULT_BIG_PERIODS,
+};

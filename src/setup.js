@@ -376,7 +376,23 @@ function rebuildGroups(data) {
   return { data: newData, droppedCount };
 }
 
+/**
+ * What a Subjects/Classes/Bands edit should do to the group list. Until the
+ * HOD edits groups on the Board, the old behaviour stands (regenerate). Once
+ * the board owns them (`groupsFrozen`), a setup edit leaves the groups alone;
+ * the confirmed "Rebuild groups from setup" button is the way back.
+ * @param {any} next
+ * @returns {{data:any, droppedCount:number, frozen:boolean}}
+ */
+function applySetupEdit(next) {
+  if (next && next.groupsFrozen)
+    return { data: next, droppedCount: 0, frozen: true };
+  return { ...rebuildGroups(next), frozen: false };
+}
+
 export {
+  applySetupEdit,
+  blockFromDiscipline,
   defaultClassNames,
   generateClasses,
   generateGroups,

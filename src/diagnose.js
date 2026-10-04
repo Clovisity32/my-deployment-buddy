@@ -10,8 +10,7 @@
 //     constraints that couldn't be satisfied, which we can name in English.
 
 import { getHighs } from "./solve.js";
-import { effectiveCap } from "./data.js";
-import { BIG_PERIODS } from "./layers/mix.js";
+import { effectiveCap, bigThreshold } from "./data.js";
 import { isSet } from "./layers/groupCount.js";
 
 /**
@@ -107,18 +106,19 @@ function preCheck(data, model) {
   //     they are even eligible for (model.pairs is already qualification-
   //     filtered), or a big+small total above their own max-groups limit.
   const eligible = new Map(); // teacherId -> { big, small }
+  const threshold = bigThreshold(data);
   for (const p of model.pairs) {
     const g = groupById.get(p.groupId);
     if (!g) continue;
     if (!eligible.has(p.teacherId))
       eligible.set(p.teacherId, { big: 0, small: 0 });
-    eligible.get(p.teacherId)[g.periods >= BIG_PERIODS ? "big" : "small"]++;
+    eligible.get(p.teacherId)[g.periods >= threshold ? "big" : "small"]++;
   }
   for (const t of data.teachers) {
     const have = eligible.get(t.id) || { big: 0, small: 0 };
     if (isSet(t.bigCount) && t.bigCount > have.big)
       issues.push(
-        `"${t.name}" is set to ${t.bigCount} big group(s) (${BIG_PERIODS}+ periods), but is only qualified for ${have.big}. Lower the number or add qualifications.`,
+        `"${t.name}" is set to ${t.bigCount} big group(s) (${threshold}+ periods), but is only qualified for ${have.big}. Lower the number or add qualifications.`,
       );
     if (isSet(t.smallCount) && t.smallCount > have.small)
       issues.push(
@@ -325,7 +325,8 @@ function explainConstraint(constraintName, data, slackValue) {
     if (kind === "max")
       return `"${t.name}" would need ${rounded} group(s) more than their maximum of ${t.maxGroups} to satisfy the other requirements (often caused by a locked assignment).`;
     const n = kind === "big" ? t.bigCount : t.smallCount;
-    const label = kind === "big" ? `big (${BIG_PERIODS}+ periods)` : "small";
+    const label =
+      kind === "big" ? `big (${bigThreshold(data)}+ periods)` : "small";
     return `"${t.name}" is set to exactly ${n} ${label} group(s), but the other requirements can't allow that. Change the number or clear it.`;
   }
   if (constraintName.startsWith("pin_")) {

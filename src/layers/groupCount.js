@@ -1,14 +1,14 @@
 // L-groupCount (hard): per-teacher limits on how many groups (classes) they
 // get, counted in groups rather than periods:
 //   - maxGroups  : at most this many groups in total
-//   - bigCount   : exactly this many big groups (BIG_PERIODS+ periods)
+//   - bigCount   : exactly this many big groups (the big/small cut-off, default 10 periods)
 //   - smallCount : exactly this many small groups
 // A blank (null/undefined) field means "no rule". A count of 0 is a real rule
 // ("no big groups"). A teacher with no eligible pair still gets their row (with
 // empty terms) so an unreachable exact count shows up as infeasible instead of
 // being silently ignored.
 
-import { BIG_PERIODS } from "./mix.js";
+import { bigThreshold } from "../data.js";
 
 /** @param {any} v */
 function isSet(v) {
@@ -20,10 +20,11 @@ const groupCountLayer = {
   name: "Class counts per teacher",
   kind: "hard",
   defaultWeight: 0,
-  describe() {
-    return `Respects each teacher's maximum number of groups and their exact number of big (${BIG_PERIODS}+ periods) and small groups, where set.`;
+  describe(data) {
+    return `Respects each teacher's maximum number of groups and their exact number of big (${bigThreshold(data)}+ periods) and small groups, where set.`;
   },
   build(ctx) {
+    const threshold = bigThreshold(ctx.data);
     for (const t of ctx.data.teachers) {
       if (!isSet(t.maxGroups) && !isSet(t.bigCount) && !isSet(t.smallCount))
         continue;
@@ -36,7 +37,7 @@ const groupCountLayer = {
         if (!varName) continue;
         const term = { coef: 1, varName };
         all.push(term);
-        (g.periods >= BIG_PERIODS ? big : small).push(term);
+        (g.periods >= threshold ? big : small).push(term);
       }
 
       if (isSet(t.maxGroups))

@@ -201,3 +201,23 @@ test("compareAssignments() reports a group that newly appears or disappears", ()
     { groupId: "g1", from: ["t1"], to: [] },
   ]);
 });
+
+test("a full snapshot restores groupsFrozen and the big/small threshold", async () => {
+  const data = fullData({ groupsFrozen: true, settings: { bigPeriods: 8 } });
+  const id = await saveVersion(db, "frozen", data, "2026-02-01T00:00:00Z");
+  const restored = await restoreVersion(db, fullData(), id);
+  assert.equal(restored.groupsFrozen, true);
+  assert.deepEqual(restored.settings, { bigPeriods: 8 });
+});
+
+test("restoring a full version saved before the Board existed un-freezes the groups so typed names are protected again", async () => {
+  const old = fullData(); // no groupsFrozen, no settings
+  const id = await saveVersion(db, "pre-board", old, "2026-03-01T00:00:00Z");
+  const restored = await restoreVersion(
+    db,
+    fullData({ groupsFrozen: true, settings: { bigPeriods: 8 } }),
+    id,
+  );
+  assert.equal("groupsFrozen" in restored, false);
+  assert.equal("settings" in restored, false);
+});
