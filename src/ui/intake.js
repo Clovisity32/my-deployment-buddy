@@ -20,7 +20,7 @@ const SAVED_WHAT = {
   denies: "deny rule(s)",
 };
 
-const pending = {}; // kind -> parse result waiting for Save
+const pending = {}; // kind -> previewed rows waiting for Save
 
 const q = (card, role) => card.querySelector(`[data-role="${role}"]`);
 const saveButton = (card) => card.querySelector('[data-action="intake-save"]');
@@ -29,7 +29,7 @@ function showPreview(card, kind, rows) {
   const result = parseIntake(kind, rows, getData());
   const box = q(card, "intake-preview");
   const save = saveButton(card);
-  pending[kind] = result;
+  pending[kind] = rows;
   const lines = [];
   if (result.accepted.length === 0 && result.problems.length === 0) {
     lines.push("<p>No rows found. Paste rows or upload a filled template.</p>");
@@ -106,9 +106,15 @@ function wireIntake() {
         rowsFromPaste(kind, q(card, "intake-paste").value),
       );
     } else if (action === "intake-save") {
-      const result = pending[kind];
-      if (!result || result.problems.length > 0 || result.accepted.length === 0)
+      const rows = pending[kind];
+      if (!rows) return;
+      // Re-parse against the current data so a save never reverts edits made
+      // since the preview (another list, the Board, ...).
+      const result = parseIntake(kind, rows, getData());
+      if (result.problems.length > 0 || result.accepted.length === 0) {
+        showPreview(card, kind, rows);
         return;
+      }
       recordUndoPoint(); // so Undo on the Board can reverse this
       setData(result.next);
       delete pending[kind];
@@ -117,6 +123,16 @@ function wireIntake() {
       q(card, "intake-preview").innerHTML =
         `<p><strong>Saved ${esc(result.accepted.length)} ${esc(SAVED_WHAT[kind])}.</strong></p>`;
     }
+  });
+
+  root.addEventListener("input", (e) => {
+    if (e.target.dataset.role !== "intake-paste") return;
+    const card = e.target.closest(".intake-card");
+    if (!card || !pending[card.dataset.kind]) return;
+    delete pending[card.dataset.kind];
+    saveButton(card).disabled = true;
+    q(card, "intake-preview").innerHTML =
+      "<p>You changed the pasted rows - press Check pasted rows again.</p>";
   });
 
   root.addEventListener("change", async (e) => {
@@ -128,6 +144,8 @@ function wireIntake() {
     try {
       showPreview(card, card.dataset.kind, await readUpload(file));
     } catch (err) {
+      delete pending[card.dataset.kind];
+      saveButton(card).disabled = true;
       q(card, "intake-preview").innerHTML =
         `<p class="problems">Could not read that file: ${esc(err.message)}. Use the downloaded template and save it as .xlsx.</p>`;
     }

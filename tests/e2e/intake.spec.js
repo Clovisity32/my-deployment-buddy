@@ -160,4 +160,68 @@ test.describe("Intake", () => {
       { level: 1, stream: "G2" },
     ]);
   });
+
+  test("editing the pasted rows after a preview disables Save", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openTeachers(page);
+    const c = card(page, "formTeachers");
+    await c.locator('[data-role="intake-paste"]').fill("102	Amy Lim");
+    await c.locator('[data-action="intake-preview"]').click();
+    await expect(c.locator('[data-action="intake-save"]')).toBeEnabled();
+    await c.locator('[data-role="intake-paste"]').fill("102	Ben Ong");
+    await expect(c.locator('[data-action="intake-save"]')).toBeDisabled();
+    await expect(c.locator('[data-role="intake-preview"]')).toContainText(
+      "Check pasted rows",
+    );
+  });
+
+  test("saving another list in between does not revert it", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openTeachers(page);
+    const f = card(page, "formTeachers");
+    await f.locator('[data-role="intake-paste"]').fill("102	Amy Lim");
+    await f.locator('[data-action="intake-preview"]').click();
+    await expect(f.locator('[data-action="intake-save"]')).toBeEnabled();
+    const d = card(page, "denies");
+    await d.locator('[data-role="intake-paste"]').fill("Ben Ong	1	G2	");
+    await d.locator('[data-action="intake-preview"]').click();
+    await d.locator('[data-action="intake-save"]').click();
+    await expect(d.locator('[data-role="intake-preview"]')).toContainText(
+      "Saved",
+    );
+    await f.locator('[data-action="intake-save"]').click();
+    await expect(f.locator('[data-role="intake-preview"]')).toContainText(
+      "Saved",
+    );
+    const data = await readStoredData(page);
+    expect(data.teachers.find((t) => t.id === "t2").denies).toEqual([
+      { level: 1, stream: "G2" },
+    ]);
+    expect(data.classes.find((x) => x.id === "102").formTeacherId).toBe("t1");
+  });
+
+  test("an unreadable file after a valid preview disables Save", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openTeachers(page);
+    const c = card(page, "formTeachers");
+    await c.locator('[data-role="intake-paste"]').fill("102	Amy Lim");
+    await c.locator('[data-action="intake-preview"]').click();
+    await expect(c.locator('[data-action="intake-save"]')).toBeEnabled();
+    await c.locator('[data-role="intake-file"]').setInputFiles({
+      name: "bad.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: Buffer.from("PK\x03\x04not a spreadsheet", "latin1"),
+    });
+    await expect(c.locator('[data-role="intake-preview"]')).toContainText(
+      "Could not read that file",
+    );
+    await expect(c.locator('[data-action="intake-save"]')).toBeDisabled();
+  });
 });
