@@ -33,7 +33,7 @@ function preCheck(data, model) {
       const g = groupById.get(groupId);
       issues.push(
         g
-          ? `No teacher is qualified for "${g.label}" (${g.block}). Add a qualified teacher, or a teacher's subject list is missing ${g.block}.`
+          ? `No teacher is qualified for "${g.label}" (${g.block}), or every qualified teacher is on a deny list for it. Add a qualified teacher, check a teacher's subject list isn't missing ${g.block}, or relax a deny rule.`
           : `No teacher is qualified for group "${groupId}".`,
       );
     }

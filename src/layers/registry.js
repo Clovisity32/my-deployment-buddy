@@ -30,6 +30,7 @@
 
 import { coverageLayer } from "./coverage.js";
 import { qualificationLayer } from "./qualification.js";
+import { denyLayer } from "./deny.js";
 import { loadCapLayer } from "./loadCap.js";
 import { groupCountLayer } from "./groupCount.js";
 import { pinLayer } from "./pin.js";
@@ -44,6 +45,7 @@ import { prepsLayer } from "./preps.js";
 const LAYERS = [
   coverageLayer,
   qualificationLayer,
+  denyLayer,
   loadCapLayer,
   groupCountLayer,
   pinLayer,
