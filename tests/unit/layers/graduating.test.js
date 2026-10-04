@@ -62,6 +62,7 @@ test("graduatingSpread only goes above the preferred 2 when it has to", async ()
     layerSettings: [...QUIET, ON("graduatingSpread", 5)],
   });
   const r = await solveModel(buildModel(d));
+  assert.ok(r.optimal);
   for (const t of ["t1", "t2", "t3"])
     assert.ok(gradCount(r, t) <= 2, `${t} has ${gradCount(r, t)}`);
 });

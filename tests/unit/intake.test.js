@@ -7,6 +7,9 @@ import {
   templateRows,
   rowsFromPaste,
   parseIntake,
+  describeAccepted,
+  clearIntake,
+  countIntake,
 } from "../../src/intake.js";
 import { validate } from "../../src/data.js";
 
@@ -206,4 +209,71 @@ test("blank rows are skipped, an empty upload changes nothing, and the input is 
   assert.equal(r.next, d);
   parseIntake("formTeachers", [{ Class: "301", "Form teacher": "Ben Ong" }], d);
   assert.equal(JSON.stringify(d), before);
+});
+
+test("describeAccepted() turns accepted values into human labels", () => {
+  const d = school();
+  const ft = parseIntake(
+    "formTeachers",
+    [{ Class: "301", "Form teacher": "mdm amy lim" }],
+    d,
+  );
+  assert.deepEqual(describeAccepted("formTeachers", ft.accepted, d), {
+    headers: ["Class", "Form teacher"],
+    rows: [["Sec 3 Curiosity (301)", "Amy Lim"]],
+  });
+  const ly = parseIntake(
+    "lastYear",
+    [{ Level: 3, Class: "301", Subject: "G3_SCI_CHEM", Teacher: "Ben" }],
+    d,
+  );
+  assert.deepEqual(describeAccepted("lastYear", ly.accepted, d).rows, [
+    ["3", "301", "G3 SCI CHEM", "Ben Ong"],
+  ]);
+  const dn = parseIntake(
+    "denies",
+    [
+      { Teacher: "Ben Ong", Level: 1, Stream: "g2", Subject: "" },
+      { Teacher: "Amy Lim", Level: "", Stream: "", Subject: "G1_LSS" },
+    ],
+    d,
+  );
+  const desc = describeAccepted("denies", dn.accepted, d);
+  assert.deepEqual(desc.headers, ["Teacher", "Level", "Stream", "Subject"]);
+  assert.deepEqual(desc.rows, [
+    ["Ben Ong", "Sec 1", "G2", "any"],
+    ["Amy Lim", "any level", "any", "G1 LSS"],
+  ]);
+  assert.deepEqual(describeAccepted("nope", [], d), { headers: [], rows: [] });
+  assert.deepEqual(describeAccepted("denies", null, d).rows, []);
+});
+
+test("clearIntake() removes one list, counts it, and returns the same object when there is nothing", () => {
+  const d = school();
+  d.classes[0].formTeacherId = "t1";
+  d.teachers[1].denies = [{ level: 1 }, { stream: "G2" }];
+  d.lastYear = [
+    { level: 1, classRef: "101", subjectId: "G1_LSS", teacherId: "t1" },
+  ];
+  const before = JSON.stringify(d);
+  assert.equal(countIntake("formTeachers", d), 1);
+  assert.equal(countIntake("lastYear", d), 1);
+  assert.equal(countIntake("denies", d), 2);
+
+  const a = clearIntake("formTeachers", d);
+  assert.equal(a.classes.some((c) => "formTeacherId" in c), false);
+  assert.equal(a.lastYear.length, 1);
+  const b = clearIntake("lastYear", d);
+  assert.equal("lastYear" in b, false);
+  const c = clearIntake("denies", d);
+  assert.equal(c.teachers.some((x) => "denies" in x), false);
+  assert.equal(JSON.stringify(d), before); // never mutated
+  assert.deepEqual(validate(a), validate(d));
+
+  for (const kind of KINDS) {
+    const empty = clearIntake(kind, school());
+    assert.equal(countIntake(kind, empty), 0);
+    assert.equal(clearIntake(kind, empty), empty);
+  }
+  assert.equal(clearIntake("nope", d), d);
 });

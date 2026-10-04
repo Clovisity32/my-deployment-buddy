@@ -56,7 +56,14 @@ function toast(message, kind = "ok") {
  * Apply the result of a board operation. On a refusal, say why and redraw so
  * a dropdown snaps back; otherwise save it. Returns true if it was applied.
  */
+/** The skipped-rows list goes stale as soon as the HOD does anything else. */
+function clearContinuityReport() {
+  const report = document.getElementById("board-continuity-report");
+  if (report) report.innerHTML = "";
+}
+
 function commit(result, successMessage) {
+  clearContinuityReport();
   if (result.error) {
     toast(result.error, "error");
     renderBoard();
@@ -91,6 +98,7 @@ function resetHistory() {
 }
 
 function undo() {
+  clearContinuityReport();
   const next = history.undo(getData());
   if (!next) {
     toast("Nothing to undo yet.", "error");
@@ -101,6 +109,7 @@ function undo() {
 }
 
 function redo() {
+  clearContinuityReport();
   const next = history.redo(getData());
   if (!next) {
     toast("Nothing to redo.", "error");
@@ -389,6 +398,7 @@ function wireBoard() {
     const action = el?.dataset.action;
     const data = getData();
     const id = el ? groupIdOf(el) : "";
+    if (action && action !== "apply-continuity") clearContinuityReport();
 
     if (action === "arrange-subject" || action === "arrange-level") {
       arrange = action === "arrange-level" ? "level" : "subject";

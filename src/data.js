@@ -5,7 +5,7 @@
 /** @typedef {{id:string, name:string, maxPeriods:number|null}} Role */
 /** @typedef {{id:string, name:string, discipline:string, stream:string, periods:number, levels:number[]}} Subject */
 /** @typedef {{level?:number, stream?:string, subjectId?:string}} Deny */
-/** @typedef {{level:number, classRef:string, subjectId:string, teacherId:string}} LastYearRow */
+/** @typedef {{level:number, classRef:string, subjectId:string, teacherId:string, applied?:boolean}} LastYearRow */
 /** @typedef {{id:string, level:number, name:string, subjectIds:string[], formTeacherId?:string|null}} SchoolClass */
 /** @typedef {{subjectId:string, groups:number}} BandSubject */
 /** @typedef {{id:string, name:string, classIds:string[], subjects:BandSubject[], note:string}} Band */
@@ -98,7 +98,9 @@ function isDenied(teacher, group) {
     if (!hasLevel && !r.stream && !r.subjectId) return false;
     return (
       (!hasLevel || r.level === group?.level) &&
-      (!r.stream || r.stream === group?.stream) &&
+      (!r.stream ||
+        String(r.stream).toUpperCase() ===
+          String(group?.stream ?? "").toUpperCase()) &&
       (!r.subjectId || r.subjectId === group?.subjectId)
     );
   });
@@ -118,7 +120,7 @@ function parseDeny(text) {
   const rule = {};
   const n = Number(level);
   if (level !== "" && Number.isInteger(n) && n >= 1) rule.level = n;
-  if (stream) rule.stream = stream;
+  if (stream) rule.stream = stream.toUpperCase();
   if (subjectId) rule.subjectId = subjectId;
   return rule;
 }
@@ -574,6 +576,8 @@ function validate(data) {
         for (const f of ["classRef", "subjectId", "teacherId"])
           if (typeof r[f] !== "string" || r[f].trim() === "")
             errors.push(`${p}.${f} must be a non-empty string.`);
+        if (r.applied !== undefined && typeof r.applied !== "boolean")
+          errors.push(`${p}.applied must be true or false when present.`);
       });
     }
   }

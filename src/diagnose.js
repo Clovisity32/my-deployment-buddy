@@ -10,7 +10,12 @@
 //     constraints that couldn't be satisfied, which we can name in English.
 
 import { getHighs } from "./solve.js";
-import { effectiveCap, bigThreshold, graduatingSettings } from "./data.js";
+import {
+  effectiveCap,
+  bigThreshold,
+  graduatingSettings,
+  isDenied,
+} from "./data.js";
 import { isSet } from "./layers/groupCount.js";
 
 /**
@@ -74,7 +79,9 @@ function preCheck(data, model) {
       .filter(
         (t) =>
           Array.isArray(t.qualifications) &&
-          t.qualifications.includes(subjectId),
+          t.qualifications.includes(subjectId) &&
+          // A teacher denied every group of the subject supplies nothing.
+          groupsForSubject.some((g) => !isDenied(t, g)),
       )
       .reduce((sum, t) => sum + effectiveCap(data, t), 0);
     if (demand > capacity) {
@@ -285,7 +292,8 @@ function describeQualifiedRoom(data, group) {
   const qualified = data.teachers.filter(
     (t) =>
       Array.isArray(t.qualifications) &&
-      t.qualifications.includes(group.subjectId),
+      t.qualifications.includes(group.subjectId) &&
+      !isDenied(t, group),
   );
   if (qualified.length === 0) return "";
   const parts = qualified.map((t) => {

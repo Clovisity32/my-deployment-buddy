@@ -171,6 +171,7 @@ function dataToSheets(data) {
       classRef: r.classRef,
       subjectId: r.subjectId,
       teacherId: r.teacherId,
+      applied: r.applied === true,
     })),
     // Only values that are actually set are written, so an old file
     // (no groupsFrozen, no settings) round-trips unchanged.
@@ -351,6 +352,7 @@ function sheetsToData(sheets) {
       classRef: String(row.classRef).trim(),
       subjectId: String(row.subjectId),
       teacherId: String(row.teacherId),
+      ...(toBool(row.applied) ? { applied: true } : {}),
     }));
 
   const settings = {};

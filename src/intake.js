@@ -274,6 +274,97 @@ const APPLY = {
   },
 };
 
+const subjectName = (data, id) =>
+  (data.subjects || []).find((s) => s.id === id)?.name ?? id;
+
+/**
+ * The accepted values of one intake as a small table of human labels, so the
+ * HOD can see who each fuzzy name matched.
+ * @param {string} kind
+ * @param {object[]} accepted  the `accepted` array from parseIntake()
+ * @param {any} data
+ * @returns {{headers:string[], rows:string[][]}}
+ */
+function describeAccepted(kind, accepted, data) {
+  const list = Array.isArray(accepted) ? accepted : [];
+  const d = data || {};
+  if (kind === "formTeachers")
+    return {
+      headers: [...HEADERS.formTeachers],
+      rows: list.map((a) => {
+        const c = (d.classes || []).find((x) => x.id === a.classId);
+        return [
+          c ? `Sec ${c.level} ${c.name} (${c.id})` : String(a.classId),
+          teacherName(d, a.teacherId),
+        ];
+      }),
+    };
+  if (kind === "lastYear")
+    return {
+      headers: [...HEADERS.lastYear],
+      rows: list.map((a) => [
+        String(a.level),
+        String(a.classRef),
+        subjectName(d, a.subjectId),
+        teacherName(d, a.teacherId),
+      ]),
+    };
+  if (kind === "denies")
+    return {
+      headers: [...HEADERS.denies],
+      rows: list.map((a) => [
+        teacherName(d, a.teacherId),
+        a.rule?.level !== undefined ? `Sec ${a.rule.level}` : "any level",
+        a.rule?.stream || "any",
+        a.rule?.subjectId ? subjectName(d, a.rule.subjectId) : "any",
+      ]),
+    };
+  return { headers: [], rows: [] };
+}
+
+/** How many rows of this kind are saved right now. */
+function countIntake(kind, data) {
+  if (kind === "formTeachers")
+    return (data?.classes || []).filter((c) => c.formTeacherId).length;
+  if (kind === "lastYear")
+    return Array.isArray(data?.lastYear) ? data.lastYear.length : 0;
+  if (kind === "denies")
+    return (data?.teachers || []).reduce(
+      (n, t) => n + (Array.isArray(t.denies) ? t.denies.length : 0),
+      0,
+    );
+  return 0;
+}
+
+/**
+ * Removes every saved row of one kind. Returns `data` itself when there is
+ * nothing to remove (so callers can skip the save).
+ * @param {string} kind
+ * @param {any} data
+ */
+function clearIntake(kind, data) {
+  if (countIntake(kind, data) === 0 || !data) return data;
+  if (kind === "formTeachers")
+    return {
+      ...data,
+      classes: data.classes.map((c) => {
+        const { formTeacherId, ...rest } = c;
+        return rest;
+      }),
+    };
+  if (kind === "lastYear") {
+    const { lastYear, ...rest } = data;
+    return rest;
+  }
+  return {
+    ...data,
+    teachers: data.teachers.map((t) => {
+      const { denies, ...rest } = t;
+      return rest;
+    }),
+  };
+}
+
 /**
  * @param {"formTeachers"|"lastYear"|"denies"} kind
  * @param {object[]} rows  objects keyed by header name
@@ -310,4 +401,7 @@ export {
   templateRows,
   rowsFromPaste,
   parseIntake,
+  describeAccepted,
+  countIntake,
+  clearIntake,
 };

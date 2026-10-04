@@ -76,6 +76,30 @@ test("isDenied() matches level, stream and subject; a missing part means any", (
   assert.equal(isDenied(t([{}]), g), false);
 });
 
+test("streams are case-insensitive: a typed 'g2' still denies G2", () => {
+  assert.deepEqual(parseDeny("1:g2:"), { level: 1, stream: "G2" });
+  const g = { level: 1, stream: "G2", subjectId: "x" };
+  assert.equal(isDenied({ denies: [{ level: 1, stream: "g2" }] }, g), true);
+  assert.equal(isDenied({ denies: [{ stream: "g3" }] }, g), false);
+});
+
+test("validate() takes lastYear[].applied only as a boolean", () => {
+  const row = { level: 1, classRef: "101", subjectId: "s", teacherId: "t1" };
+  assert.deepEqual(
+    validate({ ...base(), lastYear: [{ ...row, applied: true }] }),
+    [],
+  );
+  assert.deepEqual(
+    validate({ ...base(), lastYear: [{ ...row, applied: false }] }),
+    [],
+  );
+  assert.ok(
+    validate({ ...base(), lastYear: [{ ...row, applied: "yes" }] }).some((m) =>
+      m.includes("lastYear[0].applied"),
+    ),
+  );
+});
+
 test("formatDeny()/parseDeny() round-trip", () => {
   for (const rule of [
     { level: 1, stream: "G2" },

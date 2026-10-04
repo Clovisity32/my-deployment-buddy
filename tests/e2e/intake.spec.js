@@ -80,6 +80,11 @@ test.describe("Intake", () => {
     await expect(c.locator('[data-role="intake-preview"]')).toContainText(
       "2 row(s) ready",
     );
+    // The matched rows are listed so the HOD can check who each name matched.
+    const table = c.locator('[data-role="intake-preview"] table');
+    await expect(table).toContainText("(102)");
+    await expect(table).toContainText("Amy Lim");
+    await expect(table).toContainText("Ben Ong");
     await c.locator('[data-action="intake-save"]').click();
     await expect(c.locator('[data-role="intake-preview"]')).toContainText(
       "Saved",
@@ -109,6 +114,34 @@ test.describe("Intake", () => {
       "No teacher matches",
     );
     await expect(c.locator('[data-action="intake-save"]')).toBeDisabled();
+  });
+
+  test("a saved list can be removed with its own button, after a confirmation", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openTeachers(page);
+    const c = card(page, "formTeachers");
+    const clear = c.locator('[data-action="intake-clear"]');
+    // The sample already has one form teacher saved.
+    await expect(clear).toBeEnabled();
+    await c.locator('[data-role="intake-paste"]').fill("102	Amy Lim");
+    await c.locator('[data-action="intake-preview"]').click();
+    await c.locator('[data-action="intake-save"]').click();
+    await expect(c.locator('[data-role="intake-preview"]')).toContainText(
+      "Saved",
+    );
+    await expect(clear).toBeEnabled();
+    let message = "";
+    page.once("dialog", (dialog) => {
+      message = dialog.message();
+      dialog.accept();
+    });
+    await clear.click();
+    expect(message).toContain("1 form teacher"); // the save replaced the list
+    await expect(clear).toBeDisabled();
+    const data = await readStoredData(page);
+    expect(data.classes.some((x) => "formTeacherId" in x)).toBe(false);
   });
 
   test("the template downloads as an Excel file", async ({ page }) => {
@@ -226,26 +259,30 @@ test.describe("Intake", () => {
   });
 });
 
+const SEED_LAST_YEAR = (d) => ({
+  ...d,
+  lastYear: [
+    { level: 1, classRef: "101", subjectId: "G1_LSS", teacherId: "t1" }, // -> Sec 2 G1 LSS group
+    { level: 1, classRef: "199", subjectId: "G1_LSS", teacherId: "t1" }, // no such class
+  ],
+});
+
 test("Apply continuity locks last year's teacher on the Board and reports what it skipped", async ({
   page,
 }) => {
   await loadSample(page);
-  await writeStoredData(page, (d) => ({
-    ...d,
-    lastYear: [
-      { level: 1, classRef: "101", subjectId: "G1_LSS", teacherId: "t1" }, // -> Sec 2 G1 LSS group
-      { level: 1, classRef: "199", subjectId: "G1_LSS", teacherId: "t1" }, // no such class
-    ],
-  }));
+  await writeStoredData(page, SEED_LAST_YEAR);
   await openBoard(page);
+  let message = "";
   page.once("dialog", (dialog) => {
-    expect(dialog.message()).toContain("Lock 1 placement");
+    message = dialog.message();
     dialog.accept();
   });
   await page.click('[data-action="apply-continuity"]');
   await expect(page.locator("#board-toast")).toContainText(
     "Locked 1 placement",
   );
+  expect(message).toContain("Lock 1 placement");
   await expect(page.locator("#board-continuity-report")).toContainText(
     "no Sec 2 class matches",
   );
@@ -255,6 +292,45 @@ test("Apply continuity locks last year's teacher on the Board and reports what i
     groupId: "g_G1_LSS_b-2",
     locked: true,
   });
+});
+
+test("cancelling the Apply continuity confirmation adds nothing", async ({
+  page,
+}) => {
+  await loadSample(page);
+  await writeStoredData(page, SEED_LAST_YEAR);
+  await openBoard(page);
+  const before = await readStoredData(page);
+  let message = "";
+  page.once("dialog", (dialog) => {
+    message = dialog.message();
+    dialog.dismiss();
+  });
+  await page.click('[data-action="apply-continuity"]');
+  expect(message).toContain("Lock 1 placement");
+  await expect(page.locator("#board-toast")).not.toContainText("Locked");
+  const after = await readStoredData(page);
+  expect(after.assignments).toEqual(before.assignments);
+});
+
+test("Undo after Apply continuity removes the placement and clears the skipped list", async ({
+  page,
+}) => {
+  await loadSample(page);
+  await writeStoredData(page, SEED_LAST_YEAR);
+  await openBoard(page);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.click('[data-action="apply-continuity"]');
+  await expect(page.locator("#board-continuity-report")).toContainText(
+    "no Sec 2 class matches",
+  );
+  await page.click('[data-action="undo"]');
+  await expect(page.locator("#board-toast")).toContainText("Undone");
+  await expect(page.locator("#board-continuity-report")).toBeEmpty();
+  const data = await readStoredData(page);
+  expect(
+    data.assignments.some((a) => a.groupId === "g_G1_LSS_b-2" && a.locked),
+  ).toBe(false);
 });
 
 test("Apply continuity with nothing loaded says what to do next", async ({

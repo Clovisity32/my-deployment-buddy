@@ -105,7 +105,8 @@ test("skips with a reason: unknown class, no such group, unqualified, denied, fu
   assert.match(r.skipped[1].message, /no group/i);
   assert.match(r.skipped[2].message, /not qualified/i);
   assert.match(r.skipped[3].message, /deny list/i);
-  assert.match(r.skipped[4].message, /already/i);
+  assert.match(r.skipped[4].message, /already has all the teachers/i);
+  assert.equal(r.skipped[4].message.includes("already applied"), false);
 });
 
 test("applying twice never re-locks a seat the HOD unlocked on purpose", () => {
@@ -119,7 +120,63 @@ test("applying twice never re-locks a seat the HOD unlocked on purpose", () => {
   const twice = applyContinuity(unlocked);
   assert.equal(twice.added, 0);
   assert.equal(twice.data.assignments[0].locked, false);
-  assert.match(twice.skipped[0].message, /already/i);
+  assert.match(twice.skipped[0].message, /already applied once/i);
+});
+
+test("a placed teacher is reported as already placed (and not marked applied)", () => {
+  const d = school();
+  d.assignments = [{ teacherId: "t2", groupId: "g201", locked: false }];
+  d.lastYear = [ly(1, "101", "LSS", "t2")];
+  const r = applyContinuity(d);
+  assert.match(r.skipped[0].message, /already placed/i);
+  assert.equal(r.data, d);
+  assert.equal(d.lastYear[0].applied, undefined);
+});
+
+test("a seat the HOD cleared after applying is not re-locked", () => {
+  const d = school();
+  d.lastYear = [ly(1, "101", "LSS", "t2")];
+  const once = applyContinuity(d);
+  assert.equal(once.added, 1);
+  assert.equal(once.data.lastYear[0].applied, true);
+  assert.equal(d.lastYear[0].applied, undefined); // input untouched
+  const cleared = { ...once.data, assignments: [] };
+  const twice = applyContinuity(cleared);
+  assert.equal(twice.added, 0);
+  assert.equal(twice.data, cleared);
+  assert.deepEqual(twice.data.assignments, []);
+  assert.match(twice.skipped[0].message, /already applied once/);
+  assert.match(twice.skipped[0].message, /place them by hand/);
+});
+
+test("rows skipped for other reasons are not marked, so they can be retried", () => {
+  const d = school();
+  d.lastYear = [ly(1, "199", "LSS", "t1"), ly(1, "101", "LSS", "t2")];
+  const r = applyContinuity(d);
+  assert.equal(r.added, 1);
+  assert.equal(r.data.lastYear[0].applied, undefined);
+  assert.equal(r.data.lastYear[1].applied, true);
+});
+
+test("a class can be given as '3 Curiosity' / 'Sec 3 Curiosity' (last-year level)", () => {
+  const d = school();
+  d.lastYear = [
+    ly(3, "Sec 3 Curiosity", "CHEM", "t1"),
+  ];
+  assert.equal(applyContinuity(d).added, 1);
+  const d2 = school();
+  d2.lastYear = [ly(1, "1 Respect", "LSS", "t1")];
+  assert.equal(applyContinuity(d2).added, 1);
+  const d3 = school();
+  d3.lastYear = [ly(1, "S1-Respect", "LSS", "t1")];
+  assert.equal(applyContinuity(d3).added, 1);
+});
+
+test("a name matching two target classes is not guessed", () => {
+  const d = school();
+  d.classes.push({ id: "203", level: 2, name: "Respect" });
+  d.lastYear = [ly(1, "Respect", "LSS", "t1")];
+  assert.equal(applyContinuity(d).added, 0);
 });
 
 test("no last-year data, or missing arrays, is harmless", () => {

@@ -1,12 +1,15 @@
 // Continuity: last year's teacher keeps their class for Sec 1 -> 2 and
 // Sec 3 -> 4. Applied as ordinary LOCKED assignments, so the solver needs no
 // special rule and the HOD unlocks an exception with the Board's lock toggle.
-// Pure and fail-safe. Existing assignments are never changed.
+// Pure and fail-safe. Existing assignments are never changed. A last-year row
+// is marked `applied` once it has added a seat, so a seat the HOD later
+// clears is not locked back in.
 
 import { isDenied } from "./data.js";
 import { normalize } from "./intake.js";
 
 const CARRY_OVER_LEVELS = [1, 3];
+const compact = (text) => normalize(text).replace(/ /g, "");
 
 /** The class this year that last year's class became, or null. */
 function targetClass(data, row) {
@@ -25,7 +28,17 @@ function targetClass(data, row) {
     );
     if (hit) return hit;
   }
-  const byName = classes.filter((c) => normalize(c.name) === normalize(ref));
+  // Same forms the intake accepts ("Respect", "1 Respect", "Sec 1 Respect"),
+  // read with LAST year's level.
+  const want = compact(ref);
+  const byName = classes.filter((c) =>
+    [
+      c.name,
+      `${row.level}${c.name}`,
+      `s${row.level}${c.name}`,
+      `sec${row.level}${c.name}`,
+    ].some((cand) => compact(cand) === want),
+  );
   return byName.length === 1 ? byName[0] : null;
 }
 
@@ -39,12 +52,20 @@ function applyContinuity(data) {
   const groups = data?.groups || [];
   const assignments = [...(data?.assignments || [])];
   const skipped = [];
+  const applied = new Set();
   let added = 0;
 
-  for (const row of lastYear) {
+  for (const [index, row] of lastYear.entries()) {
     if (!CARRY_OVER_LEVELS.includes(row.level)) continue;
     const what = `${row.subjectId} for "${row.classRef}" (Sec ${row.level} last year)`;
     const skip = (why) => skipped.push({ message: `${what}: ${why}` });
+
+    if (row.applied === true) {
+      skip(
+        "already applied once - place them by hand if you want them back.",
+      );
+      continue;
+    }
 
     const cls = targetClass(data, row);
     if (!cls) {
@@ -91,10 +112,22 @@ function applyContinuity(data) {
       groupId: group.id,
       locked: true,
     });
+    applied.add(index);
     added += 1;
   }
 
-  return { data: added > 0 ? { ...data, assignments } : data, added, skipped };
+  if (added === 0) return { data, added, skipped };
+  return {
+    data: {
+      ...data,
+      assignments,
+      lastYear: lastYear.map((r, i) =>
+        applied.has(i) ? { ...r, applied: true } : r,
+      ),
+    },
+    added,
+    skipped,
+  };
 }
 
 export { applyContinuity };

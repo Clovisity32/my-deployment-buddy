@@ -3,11 +3,18 @@
 // index.html so a half-typed paste survives re-renders; all decisions live in
 // src/intake.js. Save stays disabled while any row has a problem.
 
-import { getData, setData } from "./store.js";
+import { getData, setData, onChange } from "./store.js";
 import { esc } from "./dom.js";
 import { getXLSX } from "../excel.js";
 import { recordUndoPoint } from "./board.js";
-import { templateRows, rowsFromPaste, parseIntake } from "../intake.js";
+import {
+  templateRows,
+  rowsFromPaste,
+  parseIntake,
+  describeAccepted,
+  countIntake,
+  clearIntake,
+} from "../intake.js";
 
 const FILE_NAMES = {
   formTeachers: "form-teachers-template.xlsx",
@@ -15,6 +22,12 @@ const FILE_NAMES = {
   denies: "deny-list-template.xlsx",
 };
 const SAVED_WHAT = {
+  formTeachers: "form teacher(s)",
+  lastYear: "last-year row(s)",
+  denies: "deny rule(s)",
+};
+
+const CLEAR_WHAT = {
   formTeachers: "form teacher(s)",
   lastYear: "last-year row(s)",
   denies: "deny rule(s)",
@@ -40,6 +53,22 @@ function showPreview(card, kind, rows) {
           ? `, ${esc(result.problems.length)} need fixing`
           : ""
       }.</p>`,
+    );
+  }
+  if (result.accepted.length > 0) {
+    const { headers, rows: matched } = describeAccepted(
+      kind,
+      result.accepted,
+      getData(),
+    );
+    lines.push(
+      `<table><thead><tr>${headers
+        .map((h) => `<th>${esc(h)}</th>`)
+        .join("")}</tr></thead><tbody>${matched
+        .map(
+          (r) => `<tr>${r.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`,
+        )
+        .join("")}</tbody></table>`,
     );
   }
   if (result.problems.length > 0) {
@@ -79,9 +108,20 @@ async function readUpload(file) {
   return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
 }
 
+// The Remove-all buttons follow the saved data (the markup is static).
+function refreshClearButtons(root) {
+  const data = getData();
+  root.querySelectorAll(".intake-card").forEach((card) => {
+    const btn = card.querySelector('[data-action="intake-clear"]');
+    if (btn) btn.disabled = countIntake(card.dataset.kind, data) === 0;
+  });
+}
+
 function wireIntake() {
   const root = document.getElementById("intake");
   if (!root) return;
+  refreshClearButtons(root);
+  onChange(() => refreshClearButtons(root));
 
   root.addEventListener("click", (e) => {
     const el = e.target.closest("[data-action]");
@@ -105,6 +145,20 @@ function wireIntake() {
         kind,
         rowsFromPaste(kind, q(card, "intake-paste").value),
       );
+    } else if (action === "intake-clear") {
+      const data = getData();
+      const n = countIntake(kind, data);
+      if (n === 0) return;
+      if (
+        !confirm(
+          `Remove all ${n} ${CLEAR_WHAT[kind]}? You can undo this from the Board.`,
+        )
+      )
+        return;
+      recordUndoPoint();
+      setData(clearIntake(kind, data));
+      q(card, "intake-preview").innerHTML =
+        `<p><strong>Removed ${esc(n)} ${esc(CLEAR_WHAT[kind])}.</strong></p>`;
     } else if (action === "intake-save") {
       const rows = pending[kind];
       if (!rows) return;

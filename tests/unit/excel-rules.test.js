@@ -99,3 +99,33 @@ test("a deny rule with an unreadable level is skipped, never broadened", () => {
   const t2 = sheetsToData(sheets).teachers.find((t) => t.id === "t2");
   assert.deepEqual(t2.denies, [{ level: 2, stream: "G2" }]);
 });
+
+test("lastYear[].applied round-trips; blank or false reads back as absent", () => {
+  const d = richData();
+  d.lastYear = [
+    { ...d.lastYear[0], applied: true },
+    { level: 3, classRef: "301", subjectId: "G3_SCI_CHEM", teacherId: "t1" },
+  ];
+  const sheets = dataToSheets(d);
+  const out = sheetsToData(sheets);
+  assert.equal(out.lastYear[0].applied, true);
+  assert.equal("applied" in out.lastYear[1], false);
+  assert.deepEqual(validate(out), []);
+  // a hand-edited / old sheet with no applied column gains no key
+  const old = sheets.LastYear.map(({ applied, ...r }) => r);
+  assert.equal(
+    sheetsToData({ ...sheets, LastYear: old }).lastYear.every(
+      (r) => !("applied" in r),
+    ),
+    true,
+  );
+});
+
+test("a lower-case stream typed into the Teachers sheet still denies", () => {
+  const sheets = dataToSheets(sample());
+  sheets.Teachers = sheets.Teachers.map((r) =>
+    r.id === "t2" ? { ...r, denies: "1:g2:" } : r,
+  );
+  const t2 = sheetsToData(sheets).teachers.find((t) => t.id === "t2");
+  assert.deepEqual(t2.denies, [{ level: 1, stream: "G2" }]);
+});
