@@ -172,6 +172,24 @@
         align-items: center;
         flex-wrap: wrap;
       }
+      .intake-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 10px 0;
+      }
+      .intake-card textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+      }
+      .intake-card .problems {
+        color: #b00020;
+        margin: 4px 0;
+        padding-left: 20px;
+      }
+      ```
       .muted {
         color: var(--muted);
       }
@@ -842,6 +860,80 @@
 
           <h2>Qualifications</h2>
           <div id="qualifications-grid"></div>
+          <section id="intake" class="intake">
+            <h2>Intake from Excel</h2>
+            <p class="muted">
+              Fill in a template, upload it (or paste the rows), check the preview, then
+              save. Each upload replaces that list.
+            </p>
+            <div class="intake-card" data-kind="formTeachers">
+              <h3>Form teachers</h3>
+              <p class="muted">One row per class: Class | Form teacher</p>
+              <div class="toolbar">
+                <button data-action="intake-template">Download template</button>
+                <button data-action="intake-upload">Upload filled file…</button>
+                <input type="file" accept=".xlsx" hidden data-role="intake-file" />
+              </div>
+              <textarea
+                data-role="intake-paste"
+                rows="4"
+                placeholder="…or paste rows copied from Excel"
+              ></textarea>
+              <div class="toolbar">
+                <button data-action="intake-preview">Check pasted rows</button>
+              </div>
+              <div data-role="intake-preview" role="status" aria-live="polite"></div>
+              <button class="primary" data-action="intake-save" disabled>
+                Save form teachers
+              </button>
+            </div>
+            <div class="intake-card" data-kind="lastYear">
+              <h3>Last year's teachers</h3>
+              <p class="muted">
+                Level | Class | Subject | Teacher (last year's level and class)
+              </p>
+              <div class="toolbar">
+                <button data-action="intake-template">Download template</button>
+                <button data-action="intake-upload">Upload filled file…</button>
+                <input type="file" accept=".xlsx" hidden data-role="intake-file" />
+              </div>
+              <textarea
+                data-role="intake-paste"
+                rows="4"
+                placeholder="…or paste rows copied from Excel"
+              ></textarea>
+              <div class="toolbar">
+                <button data-action="intake-preview">Check pasted rows</button>
+              </div>
+              <div data-role="intake-preview" role="status" aria-live="polite"></div>
+              <button class="primary" data-action="intake-save" disabled>
+                Save last year's teachers
+              </button>
+            </div>
+            <div class="intake-card" data-kind="denies">
+              <h3>Deny list</h3>
+              <p class="muted">
+                Teacher | Level | Stream | Subject (leave a cell blank for "any")
+              </p>
+              <div class="toolbar">
+                <button data-action="intake-template">Download template</button>
+                <button data-action="intake-upload">Upload filled file…</button>
+                <input type="file" accept=".xlsx" hidden data-role="intake-file" />
+              </div>
+              <textarea
+                data-role="intake-paste"
+                rows="4"
+                placeholder="…or paste rows copied from Excel"
+              ></textarea>
+              <div class="toolbar">
+                <button data-action="intake-preview">Check pasted rows</button>
+              </div>
+              <div data-role="intake-preview" role="status" aria-live="polite"></div>
+              <button class="primary" data-action="intake-save" disabled>
+                Save deny list
+              </button>
+            </div>
+          </section>
         </section>
 
         <section id="panel-layers" class="panel">
