@@ -366,17 +366,7 @@
         text-align: left;
       }
 
-      /* Groups tab */
-      .groups-level {
-        margin-bottom: 20px;
-      }
-      .groups-level h3 {
-        font-size: 13px;
-        color: var(--muted);
-        margin: 0 0 6px;
-      }
-
-      /* Deployment view */
+      /* Summary strip and shared row styles (used by the Board) */
       .summary-strip {
         display: flex;
         gap: 16px;
@@ -397,28 +387,6 @@
       .view-toggle {
         display: flex;
         gap: 4px;
-      }
-      .deployment-level h2 {
-        font-size: 15px;
-        margin: 20px 0 8px;
-      }
-      .deployment-blocks {
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-        align-items: flex-start;
-      }
-      .deployment-block {
-        flex: 1;
-        min-width: 260px;
-      }
-      .deployment-block h3 {
-        font-size: 13px;
-        color: var(--muted);
-        margin: 0 0 6px;
-      }
-      .deployment-block table {
-        font-size: 13px;
       }
       .row-incomplete {
         background: #fef3f2;
@@ -479,14 +447,175 @@
         font-size: 12px;
       }
 
+      /* Board tab */
+      .board-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        gap: 16px;
+        align-items: start;
+      }
+      .board-side {
+        position: sticky;
+        top: 8px;
+        max-height: calc(100vh - 16px);
+        overflow: auto;
+      }
+      @media (max-width: 1000px) {
+        .board-layout {
+          grid-template-columns: 1fr;
+        }
+        .board-side {
+          position: static;
+          max-height: none;
+        }
+      }
+      .board-section h2 {
+        font-size: 15px;
+        margin: 16px 0 8px;
+      }
+      .board-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .board-card {
+        flex: 1 1 300px;
+        min-width: 280px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+      }
+      .board-card h3 {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+      .board-row {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px;
+        margin-bottom: 6px;
+        background: #fff;
+      }
+      .row-main {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .row-meta {
+        font-weight: 400;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .size-badge {
+        font-size: 11px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-left: 4px;
+      }
+      .size-badge.big {
+        background: #fde8e8;
+      }
+      .row-note {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .row-warnings {
+        color: var(--warn);
+        font-size: 12px;
+        margin: 4px 0 0;
+        padding-left: 16px;
+      }
+      .grip {
+        cursor: grab;
+        user-select: none;
+        width: 1.2em;
+        text-align: center;
+      }
+      .grip-spacer {
+        display: inline-block;
+        width: 1.2em;
+      }
+      .seat.dragging {
+        opacity: 0.4;
+      }
+      .seat.highlight,
+      .tally-row.selected {
+        background: var(--locked);
+      }
+      .seat-locked select {
+        background: var(--locked);
+      }
+      .unassigned-tray {
+        border: 2px dashed var(--border);
+        border-radius: 8px;
+        padding: 8px;
+        margin-bottom: 8px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .unassigned-tray.over {
+        border-color: var(--accent);
+      }
+      table.tally {
+        font-size: 13px;
+      }
+      .tally-row {
+        cursor: pointer;
+      }
+      .tally-row.drop-target,
+      .seat.drop-target,
+      .board-row.drop-target {
+        outline: 2px solid var(--accent);
+      }
+      .status-chip.over {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      .status-chip.warn {
+        color: var(--warn);
+      }
+      .status-chip.ok {
+        color: var(--ok);
+      }
+      .toast {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: #1a1f29;
+        color: #fff;
+        z-index: 50;
+        max-width: 90vw;
+      }
+      .toast.error {
+        background: var(--danger);
+      }
+
       @media print {
         header .file-actions,
         nav.tabs,
         footer,
-        #panel-deployment .toolbar,
+        #panel-board .toolbar,
+        #panel-board .unassigned-tray,
+        #board-solve-status,
+        .row-details,
+        .card-add,
+        .grip,
+        .grip-spacer,
+        .row-main .icon,
         .seat select,
         .seat .lock-toggle {
           display: none !important;
+        }
+        .board-layout {
+          grid-template-columns: 1fr !important;
         }
         .seat .print-name {
           display: inline;
@@ -545,10 +674,9 @@
         <button data-tab="classes">&#9313; Classes</button>
         <button data-tab="bands">&#9314; Bands</button>
         <button data-tab="teachers">&#9315; Teachers</button>
-        <button data-tab="groups">&#9316; Groups</button>
+        <button data-tab="board">&#9316; Board</button>
         <button data-tab="layers">&#9317; Solve</button>
-        <button data-tab="deployment">&#9318; Deployment View</button>
-        <button data-tab="versions">&#9319; Versions</button>
+        <button data-tab="versions">&#9318; Versions</button>
       </nav>
 
       <main>
@@ -619,6 +747,13 @@
               /></label>
             </div>
             <button id="btn-generate-classes">Generate classes</button>
+            <button
+              id="btn-rebuild-groups-classes"
+              class="secondary"
+              title="Replace the Board's groups with ones generated from Subjects, Classes and Bands"
+            >
+              Rebuild groups from setup
+            </button>
           </div>
           <div id="classes-status"></div>
           <div class="toolbar">
@@ -643,6 +778,15 @@
         </section>
 
         <section id="panel-bands" class="panel">
+          <div class="toolbar">
+            <button
+              id="btn-rebuild-groups-bands"
+              class="secondary"
+              title="Replace the Board's groups with ones generated from Subjects, Classes and Bands"
+            >
+              Rebuild groups from setup
+            </button>
+          </div>
           <div id="bands-warnings"></div>
           <div id="bands-status"></div>
           <div id="bands-container"></div>
@@ -674,7 +818,7 @@
                   <th>Role</th>
                   <th>Cap (2-week periods)</th>
                   <th
-                    title="Exact number of big groups (10+ periods). Leave blank for no rule."
+                    title="Exact number of big groups (the cut-off is set on the Board tab, default 10 periods). Leave blank for no rule."
                   >
                     Big groups (exact)
                   </th>
@@ -700,58 +844,12 @@
           <div id="qualifications-grid"></div>
         </section>
 
-        <section id="panel-groups" class="panel">
-          <div class="toolbar">
-            <button id="btn-regenerate-groups">Regenerate groups</button>
-          </div>
-          <div id="groups-status"></div>
-
-          <h2>Generated groups</h2>
-          <div id="generated-groups"></div>
-
-          <h2>Custom groups</h2>
-          <div class="toolbar">
-            <button id="btn-add-custom-group">+ Add custom group</button>
-          </div>
-          <div class="table-wrap">
-            <table id="table-custom-groups">
-              <thead>
-                <tr>
-                  <th>Level</th>
-                  <th>Block</th>
-                  <th>Label</th>
-                  <th>Periods</th>
-                  <th>Teachers needed</th>
-                  <th>Subject</th>
-                  <th>Note</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-
         <section id="panel-layers" class="panel">
           <div class="toolbar">
             <button id="btn-solve" class="primary">Solve</button>
           </div>
           <div id="solve-status"></div>
           <div id="layers-list"></div>
-        </section>
-
-        <section id="panel-deployment" class="panel">
-          <div id="deployment-summary"></div>
-          <div class="toolbar">
-            <div class="view-toggle">
-              <button data-action="view-sheet" class="active">
-                Sheet layout
-              </button>
-              <button data-action="view-teacher">By teacher</button>
-            </div>
-            <button id="btn-print" title="Print this deployment">Print</button>
-          </div>
-          <div id="deployment-body"></div>
         </section>
 
         <section id="panel-versions" class="panel">
@@ -772,6 +870,69 @@
           </div>
           <div id="versions-status"></div>
           <ul class="versions-list" id="versions-list"></ul>
+        </section>
+
+        <section id="panel-board" class="panel">
+          <div class="toolbar board-controls">
+            <div
+              class="view-toggle"
+              role="group"
+              aria-label="Arrange the board by"
+            >
+              <button data-action="arrange-subject" class="active">
+                By subject
+              </button>
+              <button data-action="arrange-level">By level</button>
+            </div>
+            <span id="board-quickadd" class="quickadd"></span>
+            <label
+              title="A group with at least this many periods counts as big"
+            >
+              Big class =
+              <input
+                id="board-big-periods"
+                type="number"
+                min="1"
+                data-action="set-big-periods"
+                style="width: 4em"
+              />
+              periods or more
+            </label>
+            <button
+              data-action="undo"
+              class="secondary"
+              title="Undo the last Board change (Ctrl+Z)"
+            >
+              &#8630; Undo last change
+            </button>
+            <button
+              data-action="redo"
+              class="secondary"
+              title="Redo the change you undid (Ctrl+Y)"
+            >
+              &#8631; Redo change
+            </button>
+            <button id="btn-solve-board" class="primary">Solve</button>
+            <button data-action="print" title="Print this board">
+              Print board
+            </button>
+          </div>
+          <div id="board-solve-status"></div>
+          <div id="board-summary"></div>
+          <div class="board-layout">
+            <div id="board-body"></div>
+            <aside class="board-side">
+              <div id="board-unassigned" class="unassigned-tray"></div>
+              <div id="board-tally"></div>
+            </aside>
+          </div>
+          <div
+            id="board-toast"
+            class="toast"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></div>
         </section>
       </main>
 

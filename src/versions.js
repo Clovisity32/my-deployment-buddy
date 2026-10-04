@@ -35,6 +35,8 @@ const SETUP_FIELDS = [
   "groups",
   "groupOverrides",
   "customGroups",
+  "groupsFrozen",
+  "settings",
 ];
 
 /**
@@ -122,6 +124,13 @@ async function restoreVersion(db, data, versionId) {
     for (const field of SETUP_FIELDS) {
       if (version[field] !== undefined)
         restored[field] = deepCopy(version[field]);
+    }
+    // A full restore mirrors what was saved. A version from before the Board
+    // existed has no groupsFrozen/settings, so the current ones must not
+    // survive: left frozen, the restored groups would skip the protection of
+    // typed names and the next edit would overwrite them.
+    for (const field of ["groupsFrozen", "settings"]) {
+      if (version[field] === undefined) delete restored[field];
     }
   }
   return restored;

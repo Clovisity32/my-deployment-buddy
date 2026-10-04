@@ -4,7 +4,7 @@
 //  - dataToSheets()/sheetsToData(): PURE mapping between our data shape and
 //    plain arrays-of-rows (one array per sheet: Roles, Subjects, Classes,
 //    Bands, Teachers, Groups, GroupOverrides, CustomGroups, Layers,
-//    Deployment, Versions). No dependency on the XLSX library, so these are
+//    Deployment, Settings, Versions). No dependency on the XLSX library, so these are
 //    unit-testable with plain Node. buildDeploymentLayoutRows() is a sibling
 //    pure function for the human-readable "Deployment Layout" sheet, which
 //    isn't one-row-per-record so it doesn't fit the json_to_sheet shape the
@@ -41,6 +41,7 @@ function groupToRow(g) {
     stream: g.stream || "",
     classIds: (g.classIds || []).join(SUBJECT_SEPARATOR),
     bandId: g.bandId || "",
+    manualLabel: Boolean(g.manualLabel),
   };
 }
 
@@ -64,6 +65,7 @@ function rowToGroup(row) {
     stream: row.stream ? String(row.stream) : "",
     classIds: splitList(row.classIds),
     bandId: row.bandId ? String(row.bandId) : null,
+    ...(toBool(row.manualLabel) ? { manualLabel: true } : {}),
   };
 }
 
@@ -96,7 +98,7 @@ function parseBandSubjects(cell) {
  * @returns {{
  *   Roles:object[], Subjects:object[], Classes:object[], Bands:object[],
  *   Teachers:object[], Groups:object[], GroupOverrides:object[],
- *   CustomGroups:object[], Layers:object[], Deployment:object[],
+ *   CustomGroups:object[], Layers:object[], Deployment:object[], Settings:object[],
  *   Versions:object[],
  * }}
  */
@@ -161,6 +163,16 @@ function dataToSheets(data) {
       groupId: a.groupId,
       locked: Boolean(a.locked),
     })),
+    // Only values that are actually set are written, so an old file
+    // (no groupsFrozen, no settings) round-trips unchanged.
+    Settings: [
+      ...(data.groupsFrozen === undefined
+        ? []
+        : [{ key: "groupsFrozen", value: Boolean(data.groupsFrozen) }]),
+      ...(data.settings && data.settings.bigPeriods !== undefined
+        ? [{ key: "bigPeriods", value: data.settings.bigPeriods }]
+        : []),
+    ],
     // Versions hold nested per-snapshot data that doesn't flatten naturally
     // into spreadsheet columns; the HOD isn't expected to hand-edit this
     // sheet, only carry it - so each snapshot's payload is one JSON cell.
@@ -300,6 +312,11 @@ function sheetsToData(sheets) {
     layerSettings: safeJsonParse(row.layerSettingsJson, []),
   }));
 
+  const settingRows = Array.isArray(sheets.Settings) ? sheets.Settings : [];
+  const setting = (key) => settingRows.find((r) => r.key === key)?.value;
+  const frozen = setting("groupsFrozen");
+  const bigPeriods = setting("bigPeriods");
+
   return {
     roles,
     subjects,
@@ -312,6 +329,12 @@ function sheetsToData(sheets) {
     assignments,
     layerSettings,
     versions,
+    ...(frozen === undefined || frozen === ""
+      ? {}
+      : { groupsFrozen: toBool(frozen) }),
+    ...(bigPeriods === undefined || bigPeriods === ""
+      ? {}
+      : { settings: { bigPeriods: toNumber(bigPeriods) } }),
   };
 }
 

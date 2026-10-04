@@ -11,8 +11,7 @@
 // for effectiveCap(), which is the single source of truth for a teacher's
 // load cap.
 
-import { effectiveCap } from "./data.js";
-import { BIG_PERIODS } from "./layers/mix.js";
+import { effectiveCap, bigThreshold } from "./data.js";
 
 const CANONICAL_BLOCK_ORDER = ["LSS", "Chem", "Phy", "Bio"];
 
@@ -171,7 +170,7 @@ function buildSummary(data) {
  * @returns {{
  *   teacherId:string, name:string, roleName:string, cap:number, load:number,
  *   isPlaceholder:boolean, overCap:boolean,
- *   big:number, small:number, preps:number, // group counts; big = BIG_PERIODS+ periods; preps = distinct subjects
+ *   big:number, small:number, preps:number, // group counts; big = bigThreshold(data)+ periods; preps = distinct subjects
  *   groups:{groupId:string, label:string, periods:number, locked:boolean}[],
  * }[]}
  */
@@ -182,6 +181,7 @@ function buildTeacherView(data) {
   const roles = Array.isArray(data?.roles) ? data.roles : [];
 
   const roleById = new Map(roles.map((r) => [r.id, r]));
+  const threshold = bigThreshold(data);
 
   const rows = teachers.map((t) => {
     const role = roleById.get(t.roleId);
@@ -201,7 +201,7 @@ function buildTeacherView(data) {
         };
       });
     const load = teacherGroups.reduce((sum, g) => sum + g.periods, 0);
-    const big = teacherGroups.filter((g) => g.periods >= BIG_PERIODS).length;
+    const big = teacherGroups.filter((g) => g.periods >= threshold).length;
     const preps = new Set(teacherGroups.map((g) => g.subject)).size;
 
     return {
@@ -280,6 +280,7 @@ function wouldExceedCap(data, teacherId, groupId) {
 }
 
 export {
+  blockSortKey,
   buildDeploymentView,
   buildSummary,
   buildTeacherView,

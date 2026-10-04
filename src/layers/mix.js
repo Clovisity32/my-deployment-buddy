@@ -10,19 +10,20 @@
 // continuous and >= 0. A perfect mix is not always possible (a teacher with
 // an odd number of groups is always off by at least 1), so this is soft.
 
-const BIG_PERIODS = 10;
+import { bigThreshold } from "../data.js";
 
 const mixLayer = {
   id: "mix",
   name: "Mix big and small groups",
   kind: "soft",
   defaultWeight: 1,
-  describe() {
-    return `Give each teacher about as many big groups (${BIG_PERIODS}+ periods) as small ones.`;
+  describe(data) {
+    return `Give each teacher about as many big groups (${bigThreshold(data)}+ periods) as small ones.`;
   },
   build(ctx) {
     const weight = ctx.weight("mix");
     if (!weight) return;
+    const threshold = bigThreshold(ctx.data);
 
     let n = 0;
     for (const t of ctx.data.teachers) {
@@ -36,7 +37,7 @@ const mixLayer = {
       for (const g of ctx.data.groups) {
         const varName = ctx.x(t.id, g.id);
         if (!varName) continue;
-        (g.periods >= BIG_PERIODS ? big : small).push(varName);
+        (g.periods >= threshold ? big : small).push(varName);
       }
       if (big.length === 0 || small.length === 0) continue;
 
@@ -62,4 +63,4 @@ const mixLayer = {
   },
 };
 
-export { mixLayer, BIG_PERIODS };
+export { mixLayer };

@@ -410,3 +410,36 @@ test("buildDeploymentLayoutRows() lays out levels, blocks and rows, with '(unass
     ["401 G2 SCI_CHEM", "Amy / Ben", "Co-taught"],
   ]);
 });
+
+test("sheetsToData()/dataToSheets() round-trip groupsFrozen, bigPeriods and a manual group label", () => {
+  const data = minimalData({
+    groupsFrozen: true,
+    settings: { bigPeriods: 8 },
+    groups: [
+      {
+        id: "g1",
+        level: 3,
+        block: "Phy",
+        label: "My label",
+        manualLabel: true,
+        periods: 6,
+        band: null,
+        teachersNeeded: 1,
+        category: "",
+        note: "",
+        subjectId: null,
+        discipline: "",
+        stream: "",
+        classIds: [],
+        bandId: null,
+      },
+    ],
+  });
+  assert.deepEqual(sheetsToData(dataToSheets(data)), data);
+});
+
+test("an old file with no Settings sheet loads with neither groupsFrozen nor settings", () => {
+  const out = sheetsToData({});
+  assert.equal("groupsFrozen" in out, false);
+  assert.equal("settings" in out, false);
+});
