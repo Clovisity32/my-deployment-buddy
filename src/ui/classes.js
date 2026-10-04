@@ -4,7 +4,11 @@
 
 import { getData, setData } from "./store.js";
 import { esc } from "./dom.js";
-import { defaultClassNames, generateClasses, rebuildGroups } from "../setup.js";
+import {
+  defaultClassNames,
+  generateClasses,
+  applySetupEdit,
+} from "../setup.js";
 
 const LEVELS = [1, 2, 3, 4, 5];
 
@@ -17,12 +21,14 @@ function setClassesStatus(html, kind) {
 }
 
 function setDataAndRegenerate(next) {
-  const { data: rebuilt, droppedCount } = rebuildGroups(next);
+  const { data: rebuilt, droppedCount, frozen } = applySetupEdit(next);
   setData(rebuilt);
   setClassesStatus(
-    droppedCount > 0
-      ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
-      : "",
+    frozen
+      ? 'Your Board groups were left as they are. Press "Rebuild groups from setup" if you want them to follow this change.'
+      : droppedCount > 0
+        ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
+        : "",
     "info",
   );
 }

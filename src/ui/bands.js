@@ -4,10 +4,10 @@
 
 import { getData, setData } from "./store.js";
 import { esc, genId, isBlankNumberInput } from "./dom.js";
-import { rebuildGroups, setupWarnings } from "../setup.js";
+import { applySetupEdit, setupWarnings } from "../setup.js";
 
 // See subjects.js for why edits here immediately fold in rebuildGroups(). As
-// with groups.js, surface droppedCount in this tab's own status box so a
+// with the other setup tabs, surface droppedCount in this tab's own status box so a
 // band/classIds edit that drops a (possibly locked) assignment isn't silent.
 function setBandsStatus(html, kind) {
   const box = document.getElementById("bands-status");
@@ -16,12 +16,14 @@ function setBandsStatus(html, kind) {
 }
 
 function setDataAndRegenerate(next) {
-  const { data: rebuilt, droppedCount } = rebuildGroups(next);
+  const { data: rebuilt, droppedCount, frozen } = applySetupEdit(next);
   setData(rebuilt);
   setBandsStatus(
-    droppedCount > 0
-      ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
-      : "",
+    frozen
+      ? 'Your Board groups were left as they are. Press "Rebuild groups from setup" if you want them to follow this change.'
+      : droppedCount > 0
+        ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
+        : "",
     "info",
   );
 }

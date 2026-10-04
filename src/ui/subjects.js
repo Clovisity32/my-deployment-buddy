@@ -5,17 +5,17 @@
 
 import { getData, setData } from "./store.js";
 import { esc, genId, isBlankNumberInput } from "./dom.js";
-import { rebuildGroups } from "../setup.js";
+import { applySetupEdit } from "../setup.js";
 
 const LEVELS = [1, 2, 3, 4, 5];
 
 // Subjects/classes/bands all feed generateGroups() - after any edit here we
 // immediately fold in rebuildGroups() so data.groups stays in sync with the
 // current setup, without ever auto-solving (rebuildGroups only touches
-// groups/assignments, never calls the solver). See groups.js and this
+// groups/assignments, never calls the solver). See applySetupEdit() in src/setup.js and this
 // project's CLAUDE.md "Re-opening never re-solves".
 //
-// Like groups.js, also surface droppedCount in this tab's own status box -
+// Also surface droppedCount in this tab's own status box -
 // e.g. deleting a subject can remove groups (and their assignments) with no
 // other feedback otherwise.
 function setSubjectsStatus(html, kind) {
@@ -25,12 +25,14 @@ function setSubjectsStatus(html, kind) {
 }
 
 function setDataAndRegenerate(next) {
-  const { data: rebuilt, droppedCount } = rebuildGroups(next);
+  const { data: rebuilt, droppedCount, frozen } = applySetupEdit(next);
   setData(rebuilt);
   setSubjectsStatus(
-    droppedCount > 0
-      ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
-      : "",
+    frozen
+      ? 'Your Board groups were left as they are. Press "Rebuild groups from setup" on the Classes or Bands tab if you want them to follow this change.'
+      : droppedCount > 0
+        ? `${esc(droppedCount)} assignment(s) were removed because their group no longer exists.`
+        : "",
     "info",
   );
 }

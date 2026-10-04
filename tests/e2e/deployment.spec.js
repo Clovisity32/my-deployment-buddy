@@ -117,13 +117,13 @@ test.describe("My Deployment Buddy", () => {
       page.locator('#table-teachers input[data-field="name"][value="Amy Lim"]'),
     ).toHaveCount(1);
 
-    await page.click('nav.tabs button[data-tab="groups"]');
-    await expect(page.locator("#generated-groups")).toContainText(
-      "403 - 405 G3 SCI_PHY Grp 1",
+    await page.click('nav.tabs button[data-tab="board"]');
+    await expect(page.locator("#board-body")).toContainText(
+      /S4 Phy G3 (.*) #1/,
     );
   });
 
-  test("regenerating classes and editing a band's group count updates the Groups tab without solving", async ({
+  test("regenerating classes and editing a band's group count updates the Board without solving", async ({
     page,
   }) => {
     await loadSample(page);
@@ -141,9 +141,9 @@ test.describe("My Deployment Buddy", () => {
       "1 Curiosity (101)",
     );
 
-    await page.click('nav.tabs button[data-tab="groups"]');
-    await expect(page.locator("#generated-groups")).toContainText(
-      "403 - 405 G3 SCI_PHY Grp 3",
+    await page.click('nav.tabs button[data-tab="board"]');
+    await expect(page.locator("#board-body")).toContainText(
+      /S4 Phy G3 (.*) #3/,
     );
 
     // Bands tab: shrink "403 - 405"'s G3 SCI_PHY from 3 groups down to 2.
@@ -154,14 +154,15 @@ test.describe("My Deployment Buddy", () => {
       .filter({ has: page.locator('option[value="G3_SCI_PHY"][selected]') });
     await subjectRow.locator('input[data-field="groups"]').fill("2");
 
-    // No "Solve" click anywhere above - the Groups tab reflects the edit
-    // immediately via rebuildGroups()/setDataAndRegenerate().
-    await page.click('nav.tabs button[data-tab="groups"]');
-    await expect(page.locator("#generated-groups")).toContainText(
-      "403 - 405 G3 SCI_PHY Grp 2",
+    // No "Solve" click anywhere above - the Board reflects the edit
+    // immediately because the sample has not been edited on the Board yet
+    // (groupsFrozen is unset), so setup edits still regenerate the groups.
+    await page.click('nav.tabs button[data-tab="board"]');
+    await expect(page.locator("#board-body")).toContainText(
+      /S4 Phy G3 (.*) #2/,
     );
-    await expect(page.locator("#generated-groups")).not.toContainText(
-      "403 - 405 G3 SCI_PHY Grp 3",
+    await expect(page.locator("#board-body")).not.toContainText(
+      /S4 Phy G3 (.*) #3/,
     );
   });
 
@@ -207,10 +208,9 @@ test.describe("My Deployment Buddy", () => {
       ).toBeLessThanOrEqual(cap);
     }
 
-    // Spot-check the Deployment View actually reflects the solve (UI
-    // wiring, not just the store). Sheet layout should show real teacher
-    // names in at least one seat, not blank/undefined.
-    await page.click('nav.tabs button[data-tab="deployment"]');
+    // Spot-check the Board actually reflects the solve (UI wiring, not just
+    // the store): real teacher names in at least one seat, not blank/undefined.
+    await page.click('nav.tabs button[data-tab="board"]');
     const printNames = await page
       .locator(".seat .print-name")
       .evaluateAll((els) => els.map((el) => el.textContent.trim()));
@@ -219,16 +219,10 @@ test.describe("My Deployment Buddy", () => {
       printNames.some((n) => n && n !== "(none)" && n !== "undefined"),
     ).toBe(true);
 
-    // By-teacher view renders too.
-    await page.click('[data-action="view-teacher"]');
-    await expect(page.locator("#deployment-body")).toContainText("Amy Lim");
-    await expect(page.locator("#deployment-body table thead")).toContainText(
-      "Load",
-    );
-
-    // Toggle back to Sheet layout.
-    await page.click('[data-action="view-sheet"]');
-    await expect(page.locator(".deployment-block").first()).toBeVisible();
+    // The live tally renders too.
+    await expect(page.locator("#board-tally")).toContainText("Amy Lim");
+    await expect(page.locator("#board-tally thead")).toContainText("Periods");
+    await expect(page.locator(".board-card").first()).toBeVisible();
 
     // Re-opening never re-solves: reload and confirm nothing changed and no
     // solve ran automatically. Auth persists across reload (Firebase's
@@ -244,7 +238,7 @@ test.describe("My Deployment Buddy", () => {
       new Set(d.assignments.map((a) => `${a.teacherId}|${a.groupId}`));
     expect(key(after)).toEqual(key(before));
 
-    await page.click('nav.tabs button[data-tab="deployment"]');
+    await page.click('nav.tabs button[data-tab="board"]');
     const printNamesAfter = await page
       .locator(".seat .print-name")
       .evaluateAll((els) => els.map((el) => el.textContent.trim()));
@@ -345,7 +339,7 @@ test.describe("My Deployment Buddy", () => {
     await loadSample(page);
     await solve(page);
 
-    await page.click('nav.tabs button[data-tab="deployment"]');
+    await page.click('nav.tabs button[data-tab="board"]');
     const lockCheckbox = page
       .locator('input[data-action="toggle-lock"]')
       .first();
@@ -356,7 +350,7 @@ test.describe("My Deployment Buddy", () => {
 
     await solve(page);
 
-    await page.click('nav.tabs button[data-tab="deployment"]');
+    await page.click('nav.tabs button[data-tab="board"]');
     const selectAfter = page.locator('select[data-action="reassign"]').first();
     const lockCheckboxAfter = page
       .locator('input[data-action="toggle-lock"]')

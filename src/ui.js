@@ -38,9 +38,14 @@ import { onAuthChange, signInWithGoogle, signOutUser } from "./auth.js";
 import { renderSubjects, wireSubjects } from "./ui/subjects.js";
 import { renderClasses, wireClasses } from "./ui/classes.js";
 import { renderBands, wireBands } from "./ui/bands.js";
+import { wireRebuildButtons } from "./ui/rebuild.js";
 import { renderTeachers, wireTeachers } from "./ui/teachers.js";
-import { renderGroups, wireGroups } from "./ui/groups.js";
-import { renderDeployment, wireDeployment } from "./ui/deployment.js";
+import {
+  renderBoard,
+  wireBoard,
+  recordUndoPoint,
+  resetHistory,
+} from "./ui/board.js";
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -140,16 +145,22 @@ function wireLayers() {
   });
 
   document.getElementById("btn-solve").addEventListener("click", onSolve);
+  document.getElementById("btn-solve-board").addEventListener("click", onSolve);
 }
 
 function setStatus(html, kind) {
-  const box = document.getElementById("solve-status");
-  box.innerHTML = html ? `<div class="status ${kind}">${html}</div>` : "";
+  const markup = html ? `<div class="status ${kind}">${html}</div>` : "";
+  for (const id of ["solve-status", "board-solve-status"]) {
+    const box = document.getElementById(id);
+    if (box) box.innerHTML = markup;
+  }
 }
 
 async function onSolve() {
-  const btn = document.getElementById("btn-solve");
-  btn.disabled = true;
+  const buttons = ["btn-solve", "btn-solve-board"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  buttons.forEach((b) => (b.disabled = true));
   setStatus("Solving…", "info");
   try {
     // Auto-snapshot before every solve, so a re-solve can always be undone
@@ -172,6 +183,7 @@ async function onSolve() {
       // last durable in Firestore - without this await, setData()'s write
       // is still in flight (fire-and-forget) when "Solved" appears, and an
       // immediate reload can race it and lose the solve.
+      recordUndoPoint(); // so the Board's Undo can reverse this solve
       await setData({
         ...working,
         assignments: result.assignments.map((a) => ({
@@ -196,7 +208,7 @@ async function onSolve() {
       "error",
     );
   } finally {
-    btn.disabled = false;
+    buttons.forEach((b) => (b.disabled = false));
   }
 }
 
@@ -285,6 +297,7 @@ This is an older version that only holds assignments and layer settings. Those a
           const db = getFirestoreDb();
           await saveVersion(db, "Auto-save before restore", getData());
           const restored = await restoreVersion(db, getData(), versionId);
+          resetHistory();
           await setData(restored);
           setVersionsStatus(
             `Restored "${esc(name)}". Your previous state was saved as "Auto-save before restore".`,
@@ -333,6 +346,7 @@ function wireFileActions() {
         const sample = await res.json();
         const errors = validate(sample);
         if (errors.length > 0) throw new Error(errors.join("; "));
+        resetHistory(); // a different school: old Undo steps must not reach it
         setData(sample);
       } catch (err) {
         alert(
@@ -364,6 +378,7 @@ function wireFileActions() {
           );
           return;
         }
+        resetHistory();
         setData(imported);
       } catch (err) {
         alert(`Could not read that Excel file: ${err.message}`);
@@ -380,9 +395,8 @@ function renderAll() {
   renderClasses();
   renderBands();
   renderTeachers();
-  renderGroups();
   renderLayers();
-  renderDeployment();
+  renderBoard();
   renderVersions();
 }
 
@@ -435,10 +449,10 @@ async function onSignedIn(user) {
     wireSubjects();
     wireClasses();
     wireBands();
+    wireRebuildButtons();
     wireTeachers();
-    wireGroups();
     wireLayers();
-    wireDeployment();
+    wireBoard();
     wireVersions();
     installBlankNumberRestore();
     wireFileActions();
