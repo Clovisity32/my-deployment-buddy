@@ -1,8 +1,10 @@
+import { prepKey } from "../data.js";
+
 // L-preps (soft): keep each teacher's number of different subjects (preps) as
-// low as possible. A prep is one subject a teacher has at least one group in,
-// e.g. G2_SCI_CHEM and G3_SCI_CHEM are two preps.
+// low as possible. A prep is one subject at one level and stream a teacher has
+// at least one group in, e.g. Sec 3 G2 Chem and Sec 4 G2 Chem are two preps.
 //
-// Per (teacher, subject) a 0/1 variable y is forced to 1 whenever the teacher
+// Per (teacher, prep) a 0/1 variable y is forced to 1 whenever the teacher
 // takes any group of that subject, and each y costs `weight` in the
 // objective. Only the y variables are extra binaries; they never appear in
 // the parsed assignments (solve.js only reads the assignment variables).
@@ -19,7 +21,6 @@ const prepsLayer = {
     const weight = ctx.weight("preps");
     if (!weight) return;
 
-    const subjectOf = (g) => g.subjectId || g.block;
     let n = 0;
     for (const t of ctx.data.teachers) {
       if (t.isPlaceholder) continue;
@@ -27,7 +28,7 @@ const prepsLayer = {
       for (const g of ctx.data.groups) {
         const varName = ctx.x(t.id, g.id);
         if (!varName) continue;
-        const s = subjectOf(g);
+        const s = prepKey(g);
         if (!bySubject.has(s)) bySubject.set(s, []);
         bySubject.get(s).push(varName);
       }

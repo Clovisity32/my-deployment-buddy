@@ -446,3 +446,27 @@ test("isLoadCapEnabled() defaults to on and respects an unticked layer", () => {
     false,
   );
 });
+
+test("buildTeacherView() counts the same subject at two levels as two preps", () => {
+  const mk = (id, level) => ({
+    id,
+    level,
+    block: "Chem",
+    label: id,
+    periods: 6,
+    teachersNeeded: 1,
+    subjectId: "G2_SCI_CHEM",
+    stream: "G2",
+  });
+  const data = {
+    roles: [{ id: "teacher", name: "Teacher", maxPeriods: 60 }],
+    teachers: [{ id: "a", name: "Ann", roleId: "teacher", capOverride: null }],
+    groups: [mk("g1", 3), mk("g2", 3), mk("g3", 4)],
+    assignments: [
+      { teacherId: "a", groupId: "g1" },
+      { teacherId: "a", groupId: "g2" },
+      { teacherId: "a", groupId: "g3" },
+    ],
+  };
+  assert.equal(buildTeacherView(data)[0].preps, 2);
+});
