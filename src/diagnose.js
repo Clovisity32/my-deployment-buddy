@@ -159,6 +159,7 @@ const HARD_PREFIXES = [
   "loadCap_",
   "groupCount_",
   "pin_",
+  "formTeacher_",
   "bandClash_",
 ];
 
@@ -370,6 +371,16 @@ function explainConstraint(constraintName, data, slackValue) {
     return match
       ? `${match.t.name} would need to be in two places at once for band "${match.band.name}" - only one group per teacher is allowed within a band.`
       : `A teacher would need to be in two places at once within a band (${rest}) - only one group per teacher is allowed within a band.`;
+  }
+  if (constraintName.startsWith("formTeacher_")) {
+    // Name is "formTeacher_<classId>"; the id may contain underscores, so
+    // match it against the real class list.
+    const classId = constraintName.slice("formTeacher_".length);
+    const c = (data.classes || []).find((x) => x.id === classId);
+    const t = c && teacherById.get(c.formTeacherId);
+    return c && t
+      ? `"${t.name}" is form teacher of Sec ${c.level} ${c.name} but can't be given any group of that class - they may not be qualified for them, may be on a deny list for them, or the other requirements leave no room. Change the form teacher or relax a rule.`
+      : "A form teacher could not be given any group of their own class. Change the form teacher or relax a rule.";
   }
   return `Requirement "${constraintName}" could not be satisfied.`;
 }

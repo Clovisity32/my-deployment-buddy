@@ -34,6 +34,7 @@ import { denyLayer } from "./deny.js";
 import { loadCapLayer } from "./loadCap.js";
 import { groupCountLayer } from "./groupCount.js";
 import { pinLayer } from "./pin.js";
+import { formTeacherLayer } from "./formTeacher.js";
 import { bandClashLayer } from "./bandClash.js";
 import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
@@ -49,6 +50,7 @@ const LAYERS = [
   loadCapLayer,
   groupCountLayer,
   pinLayer,
+  formTeacherLayer,
   bandClashLayer,
   balanceLayer,
   mixLayer,
