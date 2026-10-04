@@ -10,7 +10,7 @@
 //     constraints that couldn't be satisfied, which we can name in English.
 
 import { getHighs } from "./solve.js";
-import { effectiveCap, bigThreshold } from "./data.js";
+import { effectiveCap, bigThreshold, graduatingSettings } from "./data.js";
 import { isSet } from "./layers/groupCount.js";
 
 /**
@@ -158,6 +158,7 @@ const HARD_PREFIXES = [
   "coverage_",
   "loadCap_",
   "groupCount_",
+  "graduatingMax_",
   "pin_",
   "formTeacher_",
   "bandClash_",
@@ -381,6 +382,13 @@ function explainConstraint(constraintName, data, slackValue) {
     return c && t
       ? `"${t.name}" is form teacher of Sec ${c.level} ${c.name} but can't be given any group of that class - they may not be qualified for them, may be on a deny list for them, or the other requirements leave no room. Change the form teacher or relax a rule.`
       : "A form teacher could not be given any group of their own class. Change the form teacher or relax a rule.";
+  }
+  if (constraintName.startsWith("graduatingMax_")) {
+    const t = teacherById.get(constraintName.slice("graduatingMax_".length));
+    const { max } = graduatingSettings(data);
+    return t
+      ? `"${t.name}" would need ${rounded} more graduating group(s) than the maximum of ${max} to satisfy the other requirements (often caused by locked assignments). Unlock one, or move a graduating class to someone else.`
+      : "A teacher's maximum of graduating groups could not be respected.";
   }
   return `Requirement "${constraintName}" could not be satisfied.`;
 }

@@ -33,6 +33,7 @@ import { qualificationLayer } from "./qualification.js";
 import { denyLayer } from "./deny.js";
 import { loadCapLayer } from "./loadCap.js";
 import { groupCountLayer } from "./groupCount.js";
+import { graduatingMaxLayer } from "./graduatingMax.js";
 import { pinLayer } from "./pin.js";
 import { formTeacherLayer } from "./formTeacher.js";
 import { bandClashLayer } from "./bandClash.js";
@@ -40,6 +41,7 @@ import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
 import { balanceLayer } from "./balance.js";
 import { mixLayer } from "./mix.js";
+import { graduatingSpreadLayer } from "./graduatingSpread.js";
 import { prepsLayer } from "./preps.js";
 
 /** Layers in build order. Order matters only for readability of the LP output. */
@@ -49,11 +51,13 @@ const LAYERS = [
   denyLayer,
   loadCapLayer,
   groupCountLayer,
+  graduatingMaxLayer,
   pinLayer,
   formTeacherLayer,
   bandClashLayer,
   balanceLayer,
   mixLayer,
+  graduatingSpreadLayer,
   prepsLayer,
   stableLayer,
   placeholderLayer,
