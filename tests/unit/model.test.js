@@ -149,39 +149,18 @@ test("locked assignments get a pin constraint fixing the variable to 1", () => {
   );
 });
 
-test("stable layer rewards keeping current assignments and penalises new ones", () => {
-  const model = buildModel(fixture());
-  const byVar = new Map(model.objectiveTerms.map((t) => [t.varName, t.coef]));
-
-  const kept1 = byVar.get(model.varNameByPair.get("t1|g1"));
-  const kept2 = byVar.get(model.varNameByPair.get("t3|g3"));
-  const notCurrent = byVar.get(model.varNameByPair.get("t2|g2"));
-
-  assert.equal(kept1, -5); // default stable weight
-  assert.equal(kept2, -5);
-  assert.equal(notCurrent, 5);
-});
-
 test("placeholder layer only adds objective terms when a placeholder teacher exists", () => {
   const data = fixture();
-  // Isolate from the soft balance layers (on by default, each adds its own
-  // objective terms).
-  data.layerSettings = [
-    "balance",
-    "mix",
-    "preps",
-    "classCount",
-    "graduatingSpread",
-  ].map((id) => ({
-    id,
-    enabled: false,
-    weight: 0,
-  }));
+  // Isolate from the soft fairness layers (each adds its own objective terms).
+  data.layerSettings = ["classCount", "mix", "preps", "graduatingSpread"].map(
+    (id) => ({
+      id,
+      enabled: false,
+      weight: 0,
+    }),
+  );
   const withoutPlaceholder = buildModel(data);
-  assert.equal(
-    withoutPlaceholder.objectiveTerms.length,
-    withoutPlaceholder.pairs.length,
-  ); // only stable's terms
+  assert.equal(withoutPlaceholder.objectiveTerms.length, 0); // nothing else is soft here
 
   data.teachers.push({
     id: "t4",
@@ -193,17 +172,86 @@ test("placeholder layer only adds objective terms when a placeholder teacher exi
   });
   const withPlaceholder = buildModel(data);
   const t4Var = withPlaceholder.varNameByPair.get("t4|g1");
-  // t4/g1 isn't in the current deployment, so stable.js also penalises it
-  // (+5); model.js sums same-variable objective contributions into one LP
-  // term, so the combined coefficient is 5 (stable) + 2560 (placeholder: 10x the
-  // largest fairness weight, from the Fairness setting) = 2565.
+  // Placeholder avoidance is 10x the largest fairness weight (256) = 2560.
   const t4Term = withPlaceholder.objectiveTerms.find(
-    (t) => t.varName === t4Var && t.coef === 2565,
+    (t) => t.varName === t4Var,
   );
-  assert.ok(
-    t4Term,
-    "expected a combined +2565 penalty term for the placeholder teacher on g1",
-  );
+  assert.equal(t4Term && t4Term.coef, 2560);
+});
+
+test("fairness layer weights come from the Fairness emphasis, not from layerSettings", () => {
+  const data = fixture();
+  data.settings = {
+    fairness: {
+      preset: "custom",
+      levels: { classCount: 1, mix: 1, preps: 1, graduating: 1 },
+    },
+  };
+  data.layerSettings = [{ id: "classCount", enabled: true, weight: 999 }];
+  const model = buildModel(data);
+  const dev = model.objectiveTerms.find((t) => t.varName.startsWith("cc_dev_"));
+  assert.ok(dev, "expected a classCount deviation term");
+  assert.equal(dev.coef, 1); // level 1 -> weight 1, the saved 999 is ignored
+});
+
+test("mix, preps and graduatingSpread weights also come from the Fairness emphasis", () => {
+  // Two teachers qualified for everything; big (12) and small (6) groups for
+  // mix, two subjects for preps, three Sec 4 groups (> prefer of 2) for graduating.
+  const g = (id, subjectId, level, periods) => ({
+    id,
+    level,
+    block: subjectId,
+    label: id,
+    periods,
+    band: null,
+    bandId: null,
+    teachersNeeded: 1,
+    subjectId,
+  });
+  const data = {
+    roles: [{ id: "r", name: "R", maxPeriods: null }],
+    teachers: ["a", "b"].map((id) => ({
+      id,
+      name: id,
+      roleId: "r",
+      capOverride: 100,
+      qualifications: ["A", "B"],
+    })),
+    groups: [
+      g("g1", "A", 4, 12),
+      g("g2", "B", 4, 6),
+      g("g3", "A", 4, 6),
+      g("g4", "B", 3, 12),
+    ],
+    assignments: [],
+    settings: {
+      fairness: {
+        preset: "custom",
+        levels: { classCount: 1, mix: 3, preps: 2, graduating: 4 },
+      },
+    },
+    layerSettings: ["mix", "preps", "graduatingSpread"].map((id) => ({
+      id,
+      enabled: true,
+      weight: 999,
+    })),
+  };
+  const model = buildModel(data);
+  const coefs = (prefix) =>
+    model.objectiveTerms
+      .filter((t) => t.varName.startsWith(prefix))
+      .map((t) => t.coef);
+  const all = (prefix, want) => {
+    const c = coefs(prefix);
+    assert.ok(c.length > 0, `expected ${prefix} objective terms`);
+    assert.ok(
+      c.every((x) => x === want),
+      `${prefix} coefficients ${c} should all be ${want}`,
+    );
+  };
+  all("mix_dev_", 16); // level 3 -> 4^2
+  all("prep_", 4); // level 2 -> 4^1
+  all("grad_over_", 64); // level 4 -> 4^3
 });
 
 test("a disabled layer contributes no constraints", () => {
@@ -216,16 +264,6 @@ test("a disabled layer contributes no constraints", () => {
   );
   // Coverage (still enabled by default) should be unaffected.
   assert.ok(model.constraints.some((c) => c.name === "coverage_g1"));
-});
-
-test("a custom weight override changes the objective coefficient", () => {
-  const data = fixture();
-  data.layerSettings = [{ id: "stable", enabled: true, weight: 100 }];
-  const model = buildModel(data);
-  const term = model.objectiveTerms.find(
-    (t) => t.varName === model.varNameByPair.get("t1|g1"),
-  );
-  assert.equal(term.coef, -100);
 });
 
 test("the generated LP text is well-formed CPLEX-LP", () => {

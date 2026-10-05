@@ -5,9 +5,9 @@
 //
 // HiGHS's WASM build is single-threaded and each solve() call creates a
 // fresh native instance (see node_modules/highs/README.md), so identical
-// input always produces identical output - which is what lets the
-// "minimise changes" layer (stable.js) produce a reproducible, minimal diff
-// on re-solve rather than a different layout each time.
+// input always produces identical output - so a re-solve is reproducible
+// (same model, same result) rather than a different layout each time; locks
+// are what keep chosen assignments in place.
 
 import loadHighs from "./vendor/highs/highs.mjs";
 

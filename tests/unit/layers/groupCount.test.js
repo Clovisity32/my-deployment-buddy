@@ -52,10 +52,8 @@ function makeData(t1Extra = {}, t2Extra = {}) {
     ],
     assignments: [],
     layerSettings: [
-      OFF("balance"),
       OFF("mix"),
       OFF("preps"),
-      OFF("stable"),
       OFF("classCount"),
       OFF("graduatingSpread"),
     ],
@@ -142,9 +140,7 @@ test("validate() accepts null/whole numbers and rejects the rest", () => {
 test("mix skips a teacher whose big/small counts are fixed", () => {
   const data = makeData({ bigCount: 1, smallCount: 1 });
   data.layerSettings = [
-    OFF("balance"),
     OFF("preps"),
-    OFF("stable"),
     OFF("classCount"),
     OFF("graduatingSpread"),
   ];

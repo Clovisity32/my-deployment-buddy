@@ -33,8 +33,8 @@ function buildModel(data) {
     // The fairness layers and placeholder avoidance take their weight from the
     // Fairness emphasis (src/fairness.js), not from layerSettings.
     if (layerId === "placeholder") return fairnessWeights(data).placeholder;
-    const key = FAIRNESS_KEY_BY_LAYER[layerId];
-    if (key) return fairnessWeights(data)[key];
+    if (Object.hasOwn(FAIRNESS_KEY_BY_LAYER, layerId))
+      return fairnessWeights(data)[FAIRNESS_KEY_BY_LAYER[layerId]];
     const layer = layers.find((l) => l.id === layerId);
     const s = settingsById.get(layerId);
     if (s && typeof s.weight === "number") return s.weight;
@@ -71,8 +71,8 @@ function buildModel(data) {
   const constraints = [];
   const extraBinaryVars = []; // Layer-declared 0/1 helper variables (not assignments).
   const objectiveByVar = new Map(); // varName -> summed coef. Multiple layers can
-  // target the same variable's objective coefficient (e.g. stable.js and
-  // placeholder.js both touch a placeholder teacher's pairs) - a CPLEX-LP row
+  // target the same variable's objective coefficient (e.g. placeholder.js and
+  // classCount.js both touch a placeholder teacher's pairs) - a CPLEX-LP row
   // may not repeat a variable, so contributions must be summed, not appended.
 
   /** @type {import('./layers/registry.js').LayerBuildContext} */

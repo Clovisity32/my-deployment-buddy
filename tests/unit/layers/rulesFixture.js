@@ -10,7 +10,7 @@ const KEY = {
   graduatingSpread: "graduating",
 };
 // Soft layers that would otherwise pull the answer around in a test.
-export const QUIET = [...FAIR_LAYERS.map(OFF), OFF("balance"), OFF("stable")];
+export const QUIET = FAIR_LAYERS.map(OFF);
 
 /**
  * Switch every fairness layer off except `layerId`, and give it `level` (1-5)
@@ -27,8 +27,6 @@ export function only(layerId, level = 3) {
   return {
     layerSettings: [
       ...FAIR_LAYERS.filter((id) => id !== layerId).map(OFF),
-      OFF("balance"),
-      OFF("stable"),
     ],
     settings: { fairness: { preset: "custom", levels } },
   };
