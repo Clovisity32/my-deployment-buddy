@@ -172,6 +172,23 @@
         align-items: center;
         flex-wrap: wrap;
       }
+      .fairness-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 10px 0;
+      }
+      .fairness-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 6px 0;
+      }
+      .fairness-card button[aria-pressed="true"] {
+        font-weight: 600;
+        outline: 2px solid var(--accent, #2a6df4);
+      }
       .intake-card {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -1006,6 +1023,36 @@
             <button id="btn-solve" class="primary">Solve</button>
           </div>
           <div id="solve-status"></div>
+          <section id="fairness" class="fairness-card">
+            <h2>Fairness emphasis</h2>
+            <p class="muted">
+              How much each kind of fairness matters when Solve has to trade one against
+              another. Higher steps are stronger; one step usually wins a trade-off and
+              two steps almost always do.
+            </p>
+            <div class="toolbar" role="group" aria-label="Fairness presets">
+              <button data-action="fairness-preset" data-preset="classCountFirst" aria-pressed="false">Class count first</button>
+              <button data-action="fairness-preset" data-preset="balanced" aria-pressed="false">Balanced</button>
+              <button data-action="fairness-preset" data-preset="fewerPreps" aria-pressed="false">Fewer preps</button>
+            </div>
+            <div data-role="fairness-status" role="status" aria-live="polite"></div>
+            <details>
+              <summary>Advanced: set each priority yourself</summary>
+              <label class="fairness-row">Even class counts
+                <input type="range" min="1" max="5" step="1" data-action="fairness-level" data-key="classCount" />
+                <span data-role="level-classCount"></span></label>
+              <label class="fairness-row">Even big/small mix
+                <input type="range" min="1" max="5" step="1" data-action="fairness-level" data-key="mix" />
+                <span data-role="level-mix"></span></label>
+              <label class="fairness-row">Fewer preps
+                <input type="range" min="1" max="5" step="1" data-action="fairness-level" data-key="preps" />
+                <span data-role="level-preps"></span></label>
+              <label class="fairness-row">Spread graduating classes
+                <input type="range" min="1" max="5" step="1" data-action="fairness-level" data-key="graduating" />
+                <span data-role="level-graduating"></span></label>
+              <p class="muted">1 = barely matters, 5 = matters most.</p>
+            </details>
+          </section>
           <div id="layers-list"></div>
         </section>
 

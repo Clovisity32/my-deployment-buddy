@@ -97,3 +97,77 @@ test.describe("Fairness - Teachers tab", () => {
     ).toBeNull();
   });
 });
+
+test.describe("Fairness - Solve tab", () => {
+  const openSolve = async (page) => {
+    await page.click('nav.tabs button[data-tab="layers"]');
+    await expect(page.locator("#fairness")).toBeVisible();
+  };
+
+  test("a preset button saves the preset and marks it selected", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openSolve(page);
+    await expect(
+      page.locator('#fairness [data-preset="classCountFirst"]'),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.click('#fairness [data-preset="balanced"]');
+    await expect(
+      page.locator('#fairness [data-preset="balanced"]'),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.locator('#fairness [data-role="fairness-status"]'),
+    ).toContainText("Balanced");
+    const f = (await readStoredData(page)).settings.fairness;
+    expect(f.preset).toBe("balanced");
+  });
+
+  test("moving a slider switches to Custom and saves the levels", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openSolve(page);
+    await page.click("#fairness summary"); // sliders live in the Advanced details
+    await page.locator('#fairness [data-key="preps"]').fill("5");
+    const f = (await readStoredData(page)).settings.fairness;
+    expect(f.preset).toBe("custom");
+    expect(f.levels.preps).toBe(5);
+    await expect(
+      page.locator('#fairness [data-role="fairness-status"]'),
+    ).toContainText("Custom");
+  });
+
+  test("the Layers list shows no weight box for the fairness layers", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openSolve(page);
+    for (const id of [
+      "classCount",
+      "mix",
+      "preps",
+      "graduatingSpread",
+      "placeholder",
+    ]) {
+      const card = page.locator(`#layers-list [data-layer-id="${id}"]`);
+      await expect(card.locator(".weight-field")).toHaveCount(0);
+      if (id === "placeholder") {
+        await expect(card).toContainText("Always kept above");
+      } else {
+        await expect(card).toContainText("Fairness emphasis");
+      }
+    }
+  });
+
+  test("Solve reports what it gave up", async ({ page }) => {
+    await loadSample(page);
+    await openSolve(page);
+    await page.click("#btn-solve");
+    await expect(page.locator("#solve-status")).toContainText("Solved", {
+      timeout: 60000,
+    });
+    await expect(page.locator("#solve-status")).toContainText("Class count:");
+    await expect(page.locator("#solve-status")).toContainText("Preps:");
+  });
+});
