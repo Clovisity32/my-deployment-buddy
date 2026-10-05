@@ -161,3 +161,15 @@ test("degenerate input gives finite numbers, never NaN or a throw", () => {
   );
   for (const v of all.values()) assert.ok(Number.isFinite(v) && v >= 0);
 });
+
+test("the remainder floors at 0 when a typed target exceeds all the seats", () => {
+  const ideals = idealClassCounts(
+    school(
+      [teacher("f", 60, { targetClasses: 5 }), teacher("s", 60)],
+      [group("g1"), group("g2")],
+    ),
+  );
+  assert.equal(ideals.get("f"), 5);
+  assert.equal(ideals.get("s"), 0);
+  for (const v of ideals.values()) assert.ok(Number.isFinite(v));
+});

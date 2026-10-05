@@ -2,7 +2,14 @@
 // Pure and fail-safe (never throws, never mutates). Used by buildModel (weights),
 // the classCount layer (ideal class counts) and the report after a Solve.
 
-import { effectiveCap, fairnessSettings, roleFillsToCap } from "./data.js";
+import {
+  bigThreshold,
+  effectiveCap,
+  fairnessSettings,
+  graduatingSettings,
+  prepKey,
+  roleFillsToCap,
+} from "./data.js";
 
 /** Which `fairnessSettings().levels` key each layer's weight comes from. */
 const FAIRNESS_KEY_BY_LAYER = {
@@ -97,4 +104,105 @@ function idealClassCounts(data) {
   return out;
 }
 
-export { FAIRNESS_KEY_BY_LAYER, fairnessWeights, idealClassCounts };
+/** @param {number} n */
+const signed = (n) => `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}`;
+
+/**
+ * Plain-language lines about how fair the current assignments are, one per
+ * measure. Empty when nothing is assigned. Placeholder teachers are ignored.
+ * @param {any} data
+ * @returns {{key:"classCount"|"mix"|"preps"|"graduating", text:string}[]}
+ */
+function fairnessReport(data) {
+  const teachers = (Array.isArray(data?.teachers) ? data.teachers : []).filter(
+    (t) => t && !t.isPlaceholder,
+  );
+  const groups = Array.isArray(data?.groups) ? data.groups : [];
+  const assignments = Array.isArray(data?.assignments) ? data.assignments : [];
+  if (assignments.length === 0 || teachers.length === 0) return [];
+
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const held = new Map(teachers.map((t) => [t.id, []]));
+  for (const a of assignments) {
+    const g = groupById.get(a?.groupId);
+    if (g && held.has(a.teacherId)) held.get(a.teacherId).push(g);
+  }
+  if ([...held.values()].every((gs) => gs.length === 0)) return [];
+
+  const out = [];
+  const byId = new Map(teachers.map((t) => [t.id, t]));
+
+  // Class count: the largest gap from each teacher's ideal.
+  const ideals = idealClassCounts(data);
+  let worst = null;
+  for (const [id, ideal] of ideals) {
+    const gap = (held.get(id)?.length ?? 0) - ideal;
+    if (!worst || Math.abs(gap) > Math.abs(worst.gap)) worst = { id, gap };
+  }
+  if (worst) {
+    out.push({
+      key: "classCount",
+      text:
+        Math.abs(worst.gap) < 0.5
+          ? "Class count: everyone is on their ideal number of classes."
+          : `Class count: everyone is within ${Math.ceil(Math.abs(worst.gap))} class(es) of their ideal; the largest gap is ${byId.get(worst.id).name} at ${signed(worst.gap)}.`,
+    });
+  }
+
+  // Mix: more than 1 away from an even big/small split.
+  const threshold = bigThreshold(data);
+  const off = [];
+  for (const t of teachers) {
+    const gs = held.get(t.id) || [];
+    const big = gs.filter((g) => g.periods >= threshold).length;
+    const diff = Math.abs(big - (gs.length - big));
+    if (diff > 1) off.push({ name: t.name, big, small: gs.length - big, diff });
+  }
+  off.sort((a, b) => b.diff - a.diff);
+  out.push({
+    key: "mix",
+    text:
+      off.length === 0
+        ? "Mix: every teacher is within 1 of an even big/small split."
+        : `Mix: ${off.length} teacher(s) are more than 1 away from an even big/small split, most of all ${off[0].name} (${off[0].big} big, ${off[0].small} small).`,
+  });
+
+  // Preps: the most any teacher holds.
+  let top = null;
+  for (const t of teachers) {
+    const n = new Set((held.get(t.id) || []).map(prepKey)).size;
+    if (!top || n > top.n) top = { n, name: t.name };
+  }
+  if (top && top.n > 0) {
+    out.push({
+      key: "preps",
+      text: `Preps: the most any teacher holds is ${top.n} (${top.name}).`,
+    });
+  }
+
+  // Graduating: anyone above the preferred number.
+  const { levels, prefer } = graduatingSettings(data);
+  const over = [];
+  for (const t of teachers) {
+    const n = (held.get(t.id) || []).filter((g) =>
+      levels.includes(g.level),
+    ).length;
+    if (n > prefer) over.push({ name: t.name, n });
+  }
+  over.sort((a, b) => b.n - a.n);
+  out.push({
+    key: "graduating",
+    text:
+      over.length === 0
+        ? `Graduating: nobody is above ${prefer}.`
+        : `Graduating: ${over.length} teacher(s) are above ${prefer}, most of all ${over[0].name} with ${over[0].n}.`,
+  });
+  return out;
+}
+
+export {
+  FAIRNESS_KEY_BY_LAYER,
+  fairnessWeights,
+  idealClassCounts,
+  fairnessReport,
+};
