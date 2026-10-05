@@ -4,11 +4,13 @@
 
 /** @typedef {{id:string, name:string, maxPeriods:number|null}} Role */
 /** @typedef {{id:string, name:string, discipline:string, stream:string, periods:number, levels:number[]}} Subject */
-/** @typedef {{id:string, level:number, name:string, subjectIds:string[]}} SchoolClass */
+/** @typedef {{level?:number, stream?:string, subjectId?:string}} Deny */
+/** @typedef {{level:number, classRef:string, subjectId:string, teacherId:string, applied?:boolean}} LastYearRow */
+/** @typedef {{id:string, level:number, name:string, subjectIds:string[], formTeacherId?:string|null}} SchoolClass */
 /** @typedef {{subjectId:string, groups:number}} BandSubject */
 /** @typedef {{id:string, name:string, classIds:string[], subjects:BandSubject[], note:string}} Band */
 /** @typedef {{label?:string, teachersNeeded?:number, note?:string}} GroupOverride */
-/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean, bigCount?:number|null, smallCount?:number|null, maxGroups?:number|null}} Teacher */
+/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean, bigCount?:number|null, smallCount?:number|null, maxGroups?:number|null, denies?:Deny[]}} Teacher */
 /**
  * @typedef {{
  *   id:string, level:number, block:string, label:string, periods:number,
@@ -36,6 +38,91 @@ function bigThreshold(data) {
   return typeof n === "number" && Number.isFinite(n) && n >= 1
     ? n
     : DEFAULT_BIG_PERIODS;
+}
+
+const DEFAULT_GRADUATING_LEVELS = [4, 5];
+const DEFAULT_MAX_GRADUATING = 3;
+const DEFAULT_PREFER_GRADUATING = 2;
+
+/** @param {any} v @param {number} fallback */
+function wholeOr(v, fallback) {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : fallback;
+}
+
+/**
+ * Which levels count as graduating, the hard maximum per teacher and the
+ * number the solver should aim for. Anything missing or nonsensical falls
+ * back to the defaults so old files behave exactly as before.
+ * @param {any} data
+ * @returns {{levels:number[], max:number, prefer:number}}
+ */
+function graduatingSettings(data) {
+  const s = data?.settings || {};
+  const levels =
+    Array.isArray(s.graduatingLevels) &&
+    s.graduatingLevels.length > 0 &&
+    s.graduatingLevels.every((n) => Number.isInteger(n) && n >= 1)
+      ? s.graduatingLevels
+      : DEFAULT_GRADUATING_LEVELS;
+  const max = wholeOr(s.maxGraduating, DEFAULT_MAX_GRADUATING);
+  const prefer = Math.min(
+    wholeOr(s.preferGraduating, DEFAULT_PREFER_GRADUATING),
+    max,
+  );
+  return { levels, max, prefer };
+}
+
+/**
+ * What counts as one "prep": the same subject, stream and level. Two Sec 3
+ * Chem groups are one prep; Sec 3 Chem and Sec 4 Chem are two.
+ * @param {any} g
+ * @returns {string}
+ */
+function prepKey(g) {
+  return `${g?.subjectId || g?.block || ""}|${g?.stream || ""}|${g?.level ?? ""}`;
+}
+
+/**
+ * Is this teacher barred from this group by one of their deny rules? A rule
+ * is {level?, stream?, subjectId?}; a missing part means "any". A rule that
+ * names nothing denies nothing (never "everything").
+ * @param {any} teacher
+ * @param {any} group
+ * @returns {boolean}
+ */
+function isDenied(teacher, group) {
+  const rules = Array.isArray(teacher?.denies) ? teacher.denies : [];
+  return rules.some((r) => {
+    if (!r || typeof r !== "object") return false;
+    const hasLevel = r.level !== undefined && r.level !== null;
+    if (!hasLevel && !r.stream && !r.subjectId) return false;
+    return (
+      (!hasLevel || r.level === group?.level) &&
+      (!r.stream ||
+        String(r.stream).toUpperCase() ===
+          String(group?.stream ?? "").toUpperCase()) &&
+      (!r.subjectId || r.subjectId === group?.subjectId)
+    );
+  });
+}
+
+/** @param {Deny} rule @returns {string} "level:stream:subjectId", blanks allowed */
+function formatDeny(rule) {
+  return `${rule.level ?? ""}:${rule.stream ?? ""}:${rule.subjectId ?? ""}`;
+}
+
+/** @param {string} text @returns {Deny} the inverse of formatDeny() */
+function parseDeny(text) {
+  const [level = "", stream = "", subjectId = ""] = String(text)
+    .split(":")
+    .map((s) => s.trim());
+  /** @type {Deny} */
+  const rule = {};
+  const n = Number(level);
+  if (level !== "" && Number.isInteger(n) && n >= 1) rule.level = n;
+  if (stream) rule.stream = stream.toUpperCase();
+  if (subjectId) rule.subjectId = subjectId;
+  return rule;
 }
 
 /** Canonical empty state. */
@@ -224,6 +311,14 @@ function validate(data) {
           errors.push(`classes[${i}].name must be a non-empty string.`);
         if (typeof c.subjectIds !== "undefined" && !Array.isArray(c.subjectIds))
           errors.push(`classes[${i}].subjectIds must be an array.`);
+        if (
+          typeof c.formTeacherId !== "undefined" &&
+          c.formTeacherId !== null &&
+          typeof c.formTeacherId !== "string"
+        )
+          errors.push(
+            `classes[${i}].formTeacherId must be a teacher id or null.`,
+          );
       });
     }
   }
@@ -312,6 +407,31 @@ function validate(data) {
           errors.push(
             `teachers[${i}].${field} must be a whole number >= 0 or null.`,
           );
+      }
+      if (typeof t.denies !== "undefined") {
+        if (!Array.isArray(t.denies)) {
+          errors.push(`teachers[${i}].denies must be an array.`);
+        } else {
+          t.denies.forEach((r, j) => {
+            const p = `teachers[${i}].denies[${j}]`;
+            if (!r || typeof r !== "object") {
+              errors.push(`${p} must be an object.`);
+              return;
+            }
+            const hasLevel = r.level !== undefined && r.level !== null;
+            if (hasLevel && !(Number.isInteger(r.level) && r.level >= 1))
+              errors.push(`${p}.level must be a whole number of 1 or more.`);
+            if (typeof r.stream !== "undefined" && typeof r.stream !== "string")
+              errors.push(`${p}.stream must be a string.`);
+            if (
+              typeof r.subjectId !== "undefined" &&
+              typeof r.subjectId !== "string"
+            )
+              errors.push(`${p}.subjectId must be a string.`);
+            if (!hasLevel && !r.stream && !r.subjectId)
+              errors.push(`${p} must name a level, stream or subject.`);
+          });
+        }
       }
     });
 
@@ -406,15 +526,59 @@ function validate(data) {
       Array.isArray(data.settings)
     ) {
       errors.push("settings must be an object.");
-    } else if (
-      typeof data.settings.bigPeriods !== "undefined" &&
-      !(
-        typeof data.settings.bigPeriods === "number" &&
-        Number.isInteger(data.settings.bigPeriods) &&
-        data.settings.bigPeriods >= 1
+    } else {
+      const s = data.settings;
+      if (
+        typeof s.bigPeriods !== "undefined" &&
+        !(Number.isInteger(s.bigPeriods) && s.bigPeriods >= 1)
       )
-    ) {
-      errors.push("settings.bigPeriods must be a whole number of 1 or more.");
+        errors.push("settings.bigPeriods must be a whole number of 1 or more.");
+      if (
+        typeof s.graduatingLevels !== "undefined" &&
+        !(
+          Array.isArray(s.graduatingLevels) &&
+          s.graduatingLevels.every((n) => Number.isInteger(n) && n >= 1)
+        )
+      )
+        errors.push(
+          "settings.graduatingLevels must be a list of whole level numbers.",
+        );
+      for (const field of ["maxGraduating", "preferGraduating"]) {
+        if (
+          typeof s[field] !== "undefined" &&
+          !(Number.isInteger(s[field]) && s[field] >= 0)
+        )
+          errors.push(`settings.${field} must be a whole number of 0 or more.`);
+      }
+      if (
+        Number.isInteger(s.maxGraduating) &&
+        Number.isInteger(s.preferGraduating) &&
+        s.preferGraduating > s.maxGraduating
+      )
+        errors.push(
+          "settings.preferGraduating cannot be more than settings.maxGraduating.",
+        );
+    }
+  }
+
+  if (typeof data.lastYear !== "undefined") {
+    if (!Array.isArray(data.lastYear)) {
+      errors.push("lastYear must be an array.");
+    } else {
+      data.lastYear.forEach((r, i) => {
+        const p = `lastYear[${i}]`;
+        if (!r || typeof r !== "object") {
+          errors.push(`${p} must be an object.`);
+          return;
+        }
+        if (!(Number.isInteger(r.level) && r.level >= 1))
+          errors.push(`${p}.level must be a whole number of 1 or more.`);
+        for (const f of ["classRef", "subjectId", "teacherId"])
+          if (typeof r[f] !== "string" || r[f].trim() === "")
+            errors.push(`${p}.${f} must be a non-empty string.`);
+        if (r.applied !== undefined && typeof r.applied !== "boolean")
+          errors.push(`${p}.applied must be true or false when present.`);
+      });
     }
   }
 
@@ -536,4 +700,9 @@ export {
   effectiveCap,
   bigThreshold,
   DEFAULT_BIG_PERIODS,
+  graduatingSettings,
+  prepKey,
+  isDenied,
+  formatDeny,
+  parseDeny,
 };

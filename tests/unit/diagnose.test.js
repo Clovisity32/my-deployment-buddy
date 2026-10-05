@@ -6,6 +6,7 @@ import {
   preCheck,
   diagnoseInfeasibility,
   explainConstraint,
+  buildElasticLp,
 } from "../../src/diagnose.js";
 
 // Schema v2: teachers carry roleId/capOverride/qualifications (subject ids)
@@ -447,4 +448,84 @@ test("explainConstraint() for an uncovered group names qualified teachers and th
   const msg = explainConstraint("coverage_g1", data, 1);
   assert.ok(msg.includes("Amy (cap 8, 8 locked, room 0)"), msg);
   assert.ok(!msg.includes("Ben"), "unqualified teachers must not be listed");
+});
+
+test("preCheck() does not count a denied teacher's cap as supply", () => {
+  const mk = (denies) => ({
+    roles: [role1],
+    subjects: [chemSubject],
+    teachers: [
+      { id: "t1", name: "Amy", roleId: "role1", capOverride: 4, qualifications: ["chem"] },
+      {
+        id: "t2",
+        name: "Ben",
+        roleId: "role1",
+        capOverride: 4,
+        qualifications: ["chem"],
+        ...(denies ? { denies: [{ subjectId: "chem" }] } : {}),
+      },
+    ],
+    groups: [1, 2].map((i) => ({
+      id: `g${i}`,
+      level: 3,
+      block: "Chem",
+      label: `3G1 Chem ${i}`,
+      periods: 4,
+      band: null,
+      teachersNeeded: 1,
+      subjectId: "chem",
+    })),
+    assignments: [],
+  });
+  const ok = mk(false);
+  assert.deepEqual(preCheck(ok, buildModel(ok)), []);
+  const denied = mk(true);
+  const issues = preCheck(denied, buildModel(denied));
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /Chem needs 8 periods/);
+  assert.match(issues[0], /at most 4/);
+});
+
+test("the uncovered-group message does not list a denied teacher as having room", () => {
+  const data = {
+    roles: [{ id: "r", name: "R", maxPeriods: 8 }],
+    subjects: [],
+    teachers: [
+      { id: "t1", name: "Amy", roleId: "r", capOverride: null, qualifications: ["chem"] },
+      {
+        id: "t2",
+        name: "Ben",
+        roleId: "r",
+        capOverride: null,
+        qualifications: ["chem"],
+        denies: [{ level: 3 }],
+      },
+    ],
+    groups: [
+      { id: "g1", label: "Group A", level: 3, periods: 8, teachersNeeded: 1, subjectId: "chem" },
+    ],
+    assignments: [{ teacherId: "t1", groupId: "g1", locked: true }],
+  };
+  const msg = explainConstraint("coverage_g1", data, 1);
+  assert.ok(msg.includes("Amy (cap 8, 8 locked, room 0)"), msg);
+  assert.ok(!msg.includes("Ben"), "a denied teacher must not be listed");
+});
+
+test("buildElasticLp() relaxes graduatingMax_ and formTeacher_ rows but not graduatingSpread_", () => {
+  const model = {
+    objectiveTerms: [],
+    varNameByPair: new Map(),
+    constraints: [
+      { name: "graduatingMax_t1", terms: [{ coef: 1, varName: "x1" }], op: "<=", rhs: 3 },
+      { name: "formTeacher_301", terms: [{ coef: 1, varName: "x1" }], op: ">=", rhs: 1 },
+      { name: "graduatingSpread_t1", terms: [{ coef: 1, varName: "x1" }], op: "<=", rhs: 2 },
+    ],
+    extraBinaryVars: ["x1"],
+  };
+  const names = [...buildElasticLp(model).slackMeta.values()].map(
+    (m) => m.constraintName,
+  );
+  assert.ok(names.includes("graduatingMax_t1"));
+  assert.ok(names.includes("formTeacher_301"));
+  assert.equal(names.includes("graduatingSpread_t1"), false);
 });

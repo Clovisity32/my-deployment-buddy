@@ -81,6 +81,8 @@ changes.
    a violated constraint back to a plain-language sentence. If your layer is
    hard and can be individually infeasible, add its prefix to
    `HARD_PREFIXES` in `diagnose.js` and a case to `explainConstraint()`.
+   `formTeacher_` and `graduatingMax_` are in `HARD_PREFIXES`; `deny` is
+   structural (like `qualification`) so it has no prefix.
 6. Write unit tests in `tests/unit/model.test.js` (or a new
    `tests/unit/layers/<id>.test.js` if the logic is nontrivial) using the
    existing 3-teacher/4-group fixture pattern — add teachers/groups to it
@@ -107,6 +109,8 @@ changes.
 | `src/versions.js`        | Saved-version snapshots, stored in the `deployments/main/versions` Firestore subcollection.                                                             |
 | `src/board.js`           | Pure Board logic: group names, board and tally read-models, group and seat edit operations (`{ data, error }`). Unit-testable without a browser.        |
 | `src/ui/board.js`        | Board tab: rendering, drag-and-drop, undo/redo, toasts. Decisions live in `src/board.js`.                                                               |
+| `src/intake.js`          | Pure: templates, paste/upload rows → matched data; used by `src/ui/intake.js`.                                                                          |
+| `src/continuity.js`      | Pure `applyContinuity`: locked assignments from `data.lastYear`.                                                                                        |
 | `sample/sample.json`     | Fictional school mirroring the real sheet's structure (bands, co-teaching, a placeholder teacher) — used by tests and as the demo/reset data in the UI. |
 | `firestore.rules`        | Security rules restricting all access to the two-email allowlist.                                                                                       |
 

@@ -16,6 +16,7 @@
 //    Playwright e2e suite, which round-trips a real .xlsx file.
 
 import { buildDeploymentView } from "./view.js";
+import { formatDeny, parseDeny } from "./data.js";
 
 const SUBJECT_SEPARATOR = ", ";
 
@@ -99,7 +100,7 @@ function parseBandSubjects(cell) {
  *   Roles:object[], Subjects:object[], Classes:object[], Bands:object[],
  *   Teachers:object[], Groups:object[], GroupOverrides:object[],
  *   CustomGroups:object[], Layers:object[], Deployment:object[], Settings:object[],
- *   Versions:object[],
+ *   LastYear:object[], Versions:object[],
  * }}
  */
 function dataToSheets(data) {
@@ -122,6 +123,7 @@ function dataToSheets(data) {
       level: c.level,
       name: c.name,
       subjectIds: (c.subjectIds || []).join(SUBJECT_SEPARATOR),
+      formTeacherId: c.formTeacherId ?? "",
     })),
     Bands: (data.bands || []).map((b) => ({
       id: b.id,
@@ -140,6 +142,7 @@ function dataToSheets(data) {
       bigCount: t.bigCount ?? "",
       smallCount: t.smallCount ?? "",
       maxGroups: t.maxGroups ?? "",
+      denies: (t.denies || []).map(formatDeny).join("; "),
       qualifications: (t.qualifications || []).join(SUBJECT_SEPARATOR),
       isPlaceholder: Boolean(t.isPlaceholder),
     })),
@@ -163,6 +166,13 @@ function dataToSheets(data) {
       groupId: a.groupId,
       locked: Boolean(a.locked),
     })),
+    LastYear: (data.lastYear || []).map((r) => ({
+      level: r.level,
+      classRef: r.classRef,
+      subjectId: r.subjectId,
+      teacherId: r.teacherId,
+      applied: r.applied === true,
+    })),
     // Only values that are actually set are written, so an old file
     // (no groupsFrozen, no settings) round-trips unchanged.
     Settings: [
@@ -171,6 +181,22 @@ function dataToSheets(data) {
         : [{ key: "groupsFrozen", value: Boolean(data.groupsFrozen) }]),
       ...(data.settings && data.settings.bigPeriods !== undefined
         ? [{ key: "bigPeriods", value: data.settings.bigPeriods }]
+        : []),
+      ...(data.settings && data.settings.graduatingLevels !== undefined
+        ? [
+            {
+              key: "graduatingLevels",
+              value: (data.settings.graduatingLevels || []).join(
+                SUBJECT_SEPARATOR,
+              ),
+            },
+          ]
+        : []),
+      ...(data.settings && data.settings.maxGraduating !== undefined
+        ? [{ key: "maxGraduating", value: data.settings.maxGraduating }]
+        : []),
+      ...(data.settings && data.settings.preferGraduating !== undefined
+        ? [{ key: "preferGraduating", value: data.settings.preferGraduating }]
         : []),
     ],
     // Versions hold nested per-snapshot data that doesn't flatten naturally
@@ -221,7 +247,7 @@ function buildDeploymentLayoutRows(data) {
  *   Roles?:object[], Subjects?:object[], Classes?:object[], Bands?:object[],
  *   Teachers?:object[], Groups?:object[], GroupOverrides?:object[],
  *   CustomGroups?:object[], Layers?:object[], Deployment?:object[],
- *   Versions?:object[],
+ *   LastYear?:object[], Settings?:object[], Versions?:object[],
  * }} sheets
  * @returns {import('./data.js').default}
  */
@@ -251,6 +277,7 @@ function sheetsToData(sheets) {
     level: toNumber(row.level),
     name: String(row.name),
     subjectIds: splitList(row.subjectIds),
+    ...(row.formTeacherId ? { formTeacherId: String(row.formTeacherId) } : {}),
   }));
 
   const bands = (sheets.Bands || []).map((row) => ({
@@ -273,6 +300,7 @@ function sheetsToData(sheets) {
     ...optionalCount(row, "bigCount"),
     ...optionalCount(row, "smallCount"),
     ...optionalCount(row, "maxGroups"),
+    ...denyField(row.denies),
     ...(toBool(row.isPlaceholder) ? { isPlaceholder: true } : {}),
   }));
 
@@ -317,6 +345,29 @@ function sheetsToData(sheets) {
   const frozen = setting("groupsFrozen");
   const bigPeriods = setting("bigPeriods");
 
+  const lastYear = (sheets.LastYear || [])
+    .filter((row) => row.classRef !== "" && row.classRef != null)
+    .map((row) => ({
+      level: toNumber(row.level),
+      classRef: String(row.classRef).trim(),
+      subjectId: String(row.subjectId),
+      teacherId: String(row.teacherId),
+      ...(toBool(row.applied) ? { applied: true } : {}),
+    }));
+
+  const settings = {};
+  if (bigPeriods !== undefined && bigPeriods !== "")
+    settings.bigPeriods = toNumber(bigPeriods);
+  const gradLevels = setting("graduatingLevels");
+  if (gradLevels !== undefined && gradLevels !== "")
+    settings.graduatingLevels = splitList(gradLevels)
+      .map(Number)
+      .filter((n) => Number.isFinite(n));
+  for (const key of ["maxGraduating", "preferGraduating"]) {
+    const v = setting(key);
+    if (v !== undefined && v !== "") settings[key] = toNumber(v);
+  }
+
   return {
     roles,
     subjects,
@@ -332,9 +383,8 @@ function sheetsToData(sheets) {
     ...(frozen === undefined || frozen === ""
       ? {}
       : { groupsFrozen: toBool(frozen) }),
-    ...(bigPeriods === undefined || bigPeriods === ""
-      ? {}
-      : { settings: { bigPeriods: toNumber(bigPeriods) } }),
+    ...(lastYear.length > 0 ? { lastYear } : {}),
+    ...(Object.keys(settings).length > 0 ? { settings } : {}),
   };
 }
 
@@ -349,6 +399,24 @@ function toNumber(v) {
 function optionalCount(row, field) {
   const v = row[field];
   return v === "" || v == null ? {} : { [field]: toNumber(v) };
+}
+
+// "1:G2:; ::G3_SCI_CHEM" -> [{level:1, stream:"G2"}, {subjectId:"G3_SCI_CHEM"}].
+// No rules means no field, so an old file round-trips unchanged. A rule whose
+// level text is not a valid level is skipped entirely: parseDeny would drop
+// the level and leave a broader rule than the one typed.
+function denyField(cell) {
+  const rules = String(cell ?? "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((seg) => {
+      const levelText = seg.split(":")[0].trim();
+      return levelText === "" || parseDeny(seg).level !== undefined;
+    })
+    .map(parseDeny)
+    .filter((r) => r.level !== undefined || r.stream || r.subjectId);
+  return rules.length > 0 ? { denies: rules } : {};
 }
 
 function toBool(v) {

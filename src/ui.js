@@ -40,6 +40,7 @@ import { renderClasses, wireClasses } from "./ui/classes.js";
 import { renderBands, wireBands } from "./ui/bands.js";
 import { wireRebuildButtons } from "./ui/rebuild.js";
 import { renderTeachers, wireTeachers } from "./ui/teachers.js";
+import { wireIntake } from "./ui/intake.js";
 import {
   renderBoard,
   wireBoard,
@@ -451,6 +452,7 @@ async function onSignedIn(user) {
     wireBands();
     wireRebuildButtons();
     wireTeachers();
+    wireIntake();
     wireLayers();
     wireBoard();
     wireVersions();

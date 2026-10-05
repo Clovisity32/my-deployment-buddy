@@ -4,7 +4,7 @@
 // `{ data, error }`: on refusal `data` is the same object that went in and
 // `error` is a plain-language sentence for the toast.
 
-import { bigThreshold } from "./data.js";
+import { bigThreshold, isDenied } from "./data.js";
 import { blockFromDiscipline, rebuildGroups } from "./setup.js";
 import { blockSortKey, buildSummary, buildTeacherView } from "./view.js";
 import { isSet } from "./layers/groupCount.js";
@@ -170,6 +170,7 @@ function buildBoard(data, arrange = "subject") {
           locked: Boolean(a.locked),
           placeholder: Boolean(t && t.isPlaceholder),
           qualified: t ? isQualified(t, g) : true,
+          denied: t ? isDenied(t, g) : false,
         };
       });
 
@@ -182,6 +183,10 @@ function buildBoard(data, arrange = "subject") {
     for (const s of seats) {
       if (!s.qualified)
         warnings.push(`${s.teacherName} isn't qualified for this subject.`);
+      if (s.denied)
+        warnings.push(
+          `${s.teacherName} is on the deny list for this group, so Solve will not keep this placement.`,
+        );
       const inBand = g.bandId ? bandGroupIds.get(g.bandId) : null;
       if (
         inBand &&

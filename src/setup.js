@@ -53,6 +53,7 @@ function generateClasses(countsByLevel, names, existing) {
       const prior = existingById.get(id);
       if (prior) {
         generated.push({
+          ...prior,
           id,
           level,
           name: prior.name,

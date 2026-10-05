@@ -10,7 +10,12 @@
 //     constraints that couldn't be satisfied, which we can name in English.
 
 import { getHighs } from "./solve.js";
-import { effectiveCap, bigThreshold } from "./data.js";
+import {
+  effectiveCap,
+  bigThreshold,
+  graduatingSettings,
+  isDenied,
+} from "./data.js";
 import { isSet } from "./layers/groupCount.js";
 
 /**
@@ -33,7 +38,7 @@ function preCheck(data, model) {
       const g = groupById.get(groupId);
       issues.push(
         g
-          ? `No teacher is qualified for "${g.label}" (${g.block}). Add a qualified teacher, or a teacher's subject list is missing ${g.block}.`
+          ? `No teacher is qualified for "${g.label}" (${g.block}), or every qualified teacher is on a deny list for it. Add a qualified teacher, check a teacher's subject list isn't missing ${g.block}, or relax a deny rule.`
           : `No teacher is qualified for group "${groupId}".`,
       );
     }
@@ -74,7 +79,9 @@ function preCheck(data, model) {
       .filter(
         (t) =>
           Array.isArray(t.qualifications) &&
-          t.qualifications.includes(subjectId),
+          t.qualifications.includes(subjectId) &&
+          // A teacher denied every group of the subject supplies nothing.
+          groupsForSubject.some((g) => !isDenied(t, g)),
       )
       .reduce((sum, t) => sum + effectiveCap(data, t), 0);
     if (demand > capacity) {
@@ -158,7 +165,9 @@ const HARD_PREFIXES = [
   "coverage_",
   "loadCap_",
   "groupCount_",
+  "graduatingMax_",
   "pin_",
+  "formTeacher_",
   "bandClash_",
 ];
 
@@ -283,7 +292,8 @@ function describeQualifiedRoom(data, group) {
   const qualified = data.teachers.filter(
     (t) =>
       Array.isArray(t.qualifications) &&
-      t.qualifications.includes(group.subjectId),
+      t.qualifications.includes(group.subjectId) &&
+      !isDenied(t, group),
   );
   if (qualified.length === 0) return "";
   const parts = qualified.map((t) => {
@@ -370,6 +380,23 @@ function explainConstraint(constraintName, data, slackValue) {
     return match
       ? `${match.t.name} would need to be in two places at once for band "${match.band.name}" - only one group per teacher is allowed within a band.`
       : `A teacher would need to be in two places at once within a band (${rest}) - only one group per teacher is allowed within a band.`;
+  }
+  if (constraintName.startsWith("formTeacher_")) {
+    // Name is "formTeacher_<classId>"; the id may contain underscores, so
+    // match it against the real class list.
+    const classId = constraintName.slice("formTeacher_".length);
+    const c = (data.classes || []).find((x) => x.id === classId);
+    const t = c && teacherById.get(c.formTeacherId);
+    return c && t
+      ? `"${t.name}" is form teacher of Sec ${c.level} ${c.name} but can't be given any group of that class - they may not be qualified for them, may be on a deny list for them, or the other requirements leave no room. Change the form teacher or relax a rule.`
+      : "A form teacher could not be given any group of their own class. Change the form teacher or relax a rule.";
+  }
+  if (constraintName.startsWith("graduatingMax_")) {
+    const t = teacherById.get(constraintName.slice("graduatingMax_".length));
+    const { max } = graduatingSettings(data);
+    return t
+      ? `"${t.name}" would need ${rounded} more graduating group(s) than the maximum of ${max} to satisfy the other requirements (often caused by locked assignments). Unlock one, or move a graduating class to someone else.`
+      : "A teacher's maximum of graduating groups could not be respected.";
   }
   return `Requirement "${constraintName}" could not be satisfied.`;
 }

@@ -132,7 +132,8 @@
       "id": "101",
       "level": 1,
       "name": "Curiosity",
-      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"]
+      "subjectIds": ["G1_LSS", "G2_LSS", "G3_LSS"],
+      "formTeacherId": "t1"
     },
     {
       "id": "102",
@@ -381,7 +382,8 @@
       "name": "Irfan Salleh",
       "roleId": "others",
       "capOverride": 20,
-      "qualifications": ["G1_LSS"]
+      "qualifications": ["G1_LSS"],
+      "denies": [{ "level": 4 }]
     },
     {
       "id": "t10",
@@ -782,7 +784,14 @@
       "id": "placeholder",
       "enabled": true,
       "weight": 50
-    }
+    },
+    { "id": "deny", "enabled": true, "weight": 1 },
+    { "id": "formTeacher", "enabled": true, "weight": 1 },
+    { "id": "graduatingMax", "enabled": true, "weight": 1 },
+    { "id": "graduatingSpread", "enabled": true, "weight": 1 }
   ],
-  "versions": []
+  "versions": [],
+  "lastYear": [
+    { "level": 1, "classRef": "101", "subjectId": "G1_LSS", "teacherId": "t1" }
+  ]
 }
