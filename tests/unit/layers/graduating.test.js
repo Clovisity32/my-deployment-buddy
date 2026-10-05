@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildModel } from "../../../src/model.js";
 import { solveModel } from "../../../src/solve.js";
 import { explainConstraint } from "../../../src/diagnose.js";
-import { fixture, group, teacher, QUIET, ON, OFF } from "./rulesFixture.js";
+import { fixture, group, teacher, only, QUIET, OFF } from "./rulesFixture.js";
 
 // Four Sec 4 groups and two Sec 2 groups, two teachers who can teach any.
 function data({ settings, layerSettings = QUIET, teachers } = {}) {
@@ -46,7 +46,7 @@ test("the maximum and the levels come from settings", () => {
 });
 
 test("graduatingSpread spreads them 2 + 2 instead of 3 + 1 or 4 + 0", async () => {
-  const d = data({ layerSettings: [...QUIET, ON("graduatingSpread", 5)] });
+  const d = data({ ...only("graduatingSpread", 3) });
   const r = await solveModel(buildModel(d));
   assert.ok(r.optimal);
   assert.deepEqual([gradCount(r, "t1"), gradCount(r, "t2")], [2, 2]);
@@ -59,7 +59,7 @@ test("graduatingSpread only goes above the preferred 2 when it has to", async ()
       teacher("t2", ["A"]),
       teacher("t3", ["A"]),
     ],
-    layerSettings: [...QUIET, ON("graduatingSpread", 5)],
+    ...only("graduatingSpread", 3),
   });
   const r = await solveModel(buildModel(d));
   assert.ok(r.optimal);

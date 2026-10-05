@@ -2,8 +2,37 @@
 // 6 periods, one teacher needed; teachers default to a 100-period cap.
 export const OFF = (id) => ({ id, enabled: false, weight: 0 });
 export const ON = (id, weight) => ({ id, enabled: true, weight });
+const FAIR_LAYERS = ["classCount", "mix", "preps", "graduatingSpread"];
+const KEY = {
+  classCount: "classCount",
+  mix: "mix",
+  preps: "preps",
+  graduatingSpread: "graduating",
+};
 // Soft layers that would otherwise pull the answer around in a test.
-export const QUIET = [OFF("balance"), OFF("mix"), OFF("preps"), OFF("stable")];
+export const QUIET = [...FAIR_LAYERS.map(OFF), OFF("balance"), OFF("stable")];
+
+/**
+ * Switch every fairness layer off except `layerId`, and give it `level` (1-5)
+ * in the fairness setting. Spread into fixture(): `fixture({ ..., ...only("preps", 3) })`.
+ */
+export function only(layerId, level = 3) {
+  const levels = {
+    classCount: 1,
+    mix: 1,
+    preps: 1,
+    graduating: 1,
+    [KEY[layerId]]: level,
+  };
+  return {
+    layerSettings: [
+      ...FAIR_LAYERS.filter((id) => id !== layerId).map(OFF),
+      OFF("balance"),
+      OFF("stable"),
+    ],
+    settings: { fairness: { preset: "custom", levels } },
+  };
+}
 
 export function group(id, subjectId, over = {}) {
   return {
@@ -38,10 +67,11 @@ export function fixture({
   layerSettings = QUIET,
   assignments = [],
   settings,
+  roles = [{ id: "r", name: "R", maxPeriods: null }],
 }) {
   const subjectIds = [...new Set(groups.map((g) => g.subjectId))];
   return {
-    roles: [{ id: "r", name: "R", maxPeriods: null }],
+    roles,
     subjects: subjectIds.map((id) => ({
       id,
       name: id,

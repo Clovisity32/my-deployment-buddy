@@ -2,9 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildModel } from "../../../src/model.js";
 import { solveModel } from "../../../src/solve.js";
-
-const OFF = (id) => ({ id, enabled: false, weight: 0 });
-const ON = (id, weight) => ({ id, enabled: true, weight });
+import { only, QUIET } from "./rulesFixture.js";
 
 function group(id, subjectId, periods) {
   return {
@@ -20,7 +18,7 @@ function group(id, subjectId, periods) {
   };
 }
 
-function fixture({ teachers, groups, layerSettings }) {
+function fixture({ teachers, groups, layerSettings, settings }) {
   return {
     roles: [{ id: "r", name: "R", maxPeriods: null }],
     subjects: [
@@ -46,6 +44,7 @@ function fixture({ teachers, groups, layerSettings }) {
     groups,
     assignments: [],
     layerSettings,
+    ...(settings ? { settings } : {}),
   };
 }
 
@@ -66,7 +65,7 @@ function byTeacher(data, assignments) {
 
 // ---------------------------------------------------------------- mix ----
 
-function mixData(layerSettings) {
+function mixData(extra) {
   return fixture({
     teachers: [teacher("t1", ["A"]), teacher("t2", ["A"])],
     groups: [
@@ -75,12 +74,12 @@ function mixData(layerSettings) {
       group("small1", "A", 6),
       group("small2", "A", 6),
     ],
-    layerSettings,
+    ...extra,
   });
 }
 
 test("mix gives each teacher about as many big groups as small ones", async () => {
-  const data = mixData([OFF("balance"), ON("mix", 1)]);
+  const data = mixData(only("mix", 1));
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);
   for (const [id, gs] of byTeacher(data, result.assignments)) {
@@ -91,7 +90,7 @@ test("mix gives each teacher about as many big groups as small ones", async () =
 });
 
 test("mix adds no rows when it is disabled", () => {
-  const model = buildModel(mixData([OFF("balance"), OFF("mix")]));
+  const model = buildModel(mixData({ layerSettings: QUIET }));
   assert.equal(
     model.constraints.filter((c) => c.name.startsWith("mix_")).length,
     0,
@@ -108,7 +107,7 @@ test("mix ignores a teacher who could only ever get one size of group", () => {
       group("b1", "B", 6),
       group("b2", "B", 6),
     ],
-    layerSettings: [OFF("balance"), ON("mix", 1)],
+    ...only("mix", 1),
   });
   const model = buildModel(data);
   const rows = model.constraints.filter((c) => c.name.startsWith("mix_"));
@@ -129,7 +128,7 @@ test("mix never makes a feasible model infeasible", async () => {
       group("b3", "A", 10),
       group("s1", "A", 6),
     ],
-    layerSettings: [OFF("balance"), ON("mix", 50)],
+    ...only("mix", 5),
   });
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);
@@ -138,7 +137,7 @@ test("mix never makes a feasible model infeasible", async () => {
 
 // -------------------------------------------------------------- preps ----
 
-function prepsData(layerSettings) {
+function prepsData(extra) {
   return fixture({
     teachers: [teacher("t1", ["A", "B"]), teacher("t2", ["A", "B"])],
     groups: [
@@ -147,7 +146,7 @@ function prepsData(layerSettings) {
       group("b1", "B", 6),
       group("b2", "B", 6),
     ],
-    layerSettings,
+    ...extra,
   });
 }
 
@@ -160,14 +159,14 @@ function prepCount(data, assignments) {
 }
 
 test("preps keeps each teacher to as few different subjects as possible", async () => {
-  const data = prepsData([OFF("balance"), ON("preps", 2)]);
+  const data = prepsData(only("preps", 2));
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);
   assert.equal(prepCount(data, result.assignments), 2); // one subject each, not 4
 });
 
 test("preps declares its yes/no variables as binary, and keeps them out of assignments", async () => {
-  const data = prepsData([OFF("balance"), ON("preps", 2)]);
+  const data = prepsData(only("preps", 2));
   const model = buildModel(data);
   assert.ok(model.extraBinaryVars.length > 0);
   for (const v of model.extraBinaryVars) {
@@ -178,7 +177,7 @@ test("preps declares its yes/no variables as binary, and keeps them out of assig
 });
 
 test("preps adds no rows or variables when it is disabled", () => {
-  const model = buildModel(prepsData([OFF("balance"), OFF("preps")]));
+  const model = buildModel(prepsData({ layerSettings: QUIET }));
   assert.equal(
     model.constraints.filter((c) => c.name.startsWith("preps_")).length,
     0,
@@ -191,7 +190,7 @@ test("preps never makes a feasible model infeasible", async () => {
   const data = fixture({
     teachers: [teacher("t1", ["A", "B"]), teacher("t2", ["A"])],
     groups: [group("a1", "A", 6), group("a2", "A", 6), group("b1", "B", 6)],
-    layerSettings: [OFF("balance"), ON("preps", 100)],
+    ...only("preps", 5),
   });
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);

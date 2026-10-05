@@ -4,6 +4,7 @@
 // row-by-row when a layer misbehaves.
 
 import { getLayers } from "./layers/registry.js";
+import { fairnessWeights, FAIRNESS_KEY_BY_LAYER } from "./fairness.js";
 
 /**
  * @param {import('./data.js').default} data
@@ -29,6 +30,11 @@ function buildModel(data) {
   };
 
   const weightOf = (layerId) => {
+    // The fairness layers and placeholder avoidance take their weight from the
+    // Fairness emphasis (src/fairness.js), not from layerSettings.
+    if (layerId === "placeholder") return fairnessWeights(data).placeholder;
+    const key = FAIRNESS_KEY_BY_LAYER[layerId];
+    if (key) return fairnessWeights(data)[key];
     const layer = layers.find((l) => l.id === layerId);
     const s = settingsById.get(layerId);
     if (s && typeof s.weight === "number") return s.weight;

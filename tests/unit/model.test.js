@@ -166,7 +166,13 @@ test("placeholder layer only adds objective terms when a placeholder teacher exi
   const data = fixture();
   // Isolate from the soft balance layers (on by default, each adds its own
   // objective terms).
-  data.layerSettings = ["balance", "mix", "preps"].map((id) => ({
+  data.layerSettings = [
+    "balance",
+    "mix",
+    "preps",
+    "classCount",
+    "graduatingSpread",
+  ].map((id) => ({
     id,
     enabled: false,
     weight: 0,
@@ -189,13 +195,14 @@ test("placeholder layer only adds objective terms when a placeholder teacher exi
   const t4Var = withPlaceholder.varNameByPair.get("t4|g1");
   // t4/g1 isn't in the current deployment, so stable.js also penalises it
   // (+5); model.js sums same-variable objective contributions into one LP
-  // term, so the combined coefficient is 5 (stable) + 50 (placeholder) = 55.
+  // term, so the combined coefficient is 5 (stable) + 2560 (placeholder: 10x the
+  // largest fairness weight, from the Fairness setting) = 2565.
   const t4Term = withPlaceholder.objectiveTerms.find(
-    (t) => t.varName === t4Var && t.coef === 55,
+    (t) => t.varName === t4Var && t.coef === 2565,
   );
   assert.ok(
     t4Term,
-    "expected a combined +55 penalty term for the placeholder teacher on g1",
+    "expected a combined +2565 penalty term for the placeholder teacher on g1",
   );
 });
 

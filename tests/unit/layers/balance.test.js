@@ -92,7 +92,10 @@ test("balance layer disabled => no balance rows", () => {
 });
 
 test("balance spreads load in proportion to each teacher's cap", async () => {
-  const data = fixture([{ id: "balance", enabled: true, weight: 1 }]);
+  const data = fixture([
+    { id: "balance", enabled: true, weight: 1 },
+    { id: "classCount", enabled: false, weight: 0 },
+  ]);
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);
   const load = loadsOf(data, result.assignments);
@@ -109,7 +112,10 @@ test("balance spreads load in proportion to each teacher's cap", async () => {
 });
 
 test("balance never makes a feasible model infeasible", async () => {
-  const data = fixture([{ id: "balance", enabled: true, weight: 100 }]);
+  const data = fixture([
+    { id: "balance", enabled: true, weight: 100 },
+    { id: "classCount", enabled: false, weight: 0 },
+  ]);
   data.teachers[2].capOverride = 6; // Cat can take exactly one group.
   const result = await solveModel(buildModel(data));
   assert.ok(result.optimal);
