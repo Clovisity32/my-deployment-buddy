@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildModel } from "../../src/model.js";
-import { solveModel } from "../../src/solve.js";
+import { solveModel, classifyStatus } from "../../src/solve.js";
 import { effectiveCap } from "../../src/data.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -176,4 +176,30 @@ test("solveModel() reports a non-Optimal status without throwing when a group ha
   assert.notEqual(result.status, "Optimal");
   assert.equal(result.optimal, false);
   assert.deepEqual(result.assignments, []);
+});
+
+test("classifyStatus() separates a time limit from optimal and from infeasible", () => {
+  assert.deepEqual(classifyStatus("Optimal"), {
+    optimal: true,
+    timedOut: false,
+  });
+  assert.deepEqual(classifyStatus("Time limit reached"), {
+    optimal: false,
+    timedOut: true,
+  });
+  assert.deepEqual(classifyStatus("Infeasible"), {
+    optimal: false,
+    timedOut: false,
+  });
+  assert.deepEqual(classifyStatus(undefined), {
+    optimal: false,
+    timedOut: false,
+  });
+});
+
+test("solveModel() reports timedOut: false next to optimal on a normal solve", async () => {
+  const model = buildModel(loadSample());
+  const result = await solveModel(model);
+  assert.equal(result.optimal, true);
+  assert.equal(result.timedOut, false);
 });

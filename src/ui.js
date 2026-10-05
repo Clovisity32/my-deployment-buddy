@@ -102,7 +102,7 @@ function renderLayers() {
             layer.kind === "soft" && FAIRNESS_KEY_BY_LAYER[layer.id]
               ? `<p class="muted">Weight set by Fairness emphasis (above).</p>`
               : layer.id === "placeholder"
-                ? `<p class="muted">Always kept above the fairness priorities, so a placeholder is only used when no real teacher can cover a group.</p>`
+                ? `<p class="muted">Always kept above the fairness priorities, so a placeholder is practically never used just to even out loads.</p>`
                 : layer.kind === "soft"
                   ? `
             <div class="weight-field">
@@ -199,12 +199,24 @@ async function onSolve() {
       };
       recordUndoPoint(); // so the Board's Undo can reverse this solve
       await setData(solved);
-      const lines = fairnessReport(solved)
-        .map((r) => `<li>${esc(r.text)}</li>`)
-        .join("");
+      let lines = "";
+      try {
+        lines = fairnessReport(solved)
+          .map((r) => `<li>${esc(r.text)}</li>`)
+          .join("");
+      } catch {
+        lines = ""; // the report is a bonus - never let it hide a good solve
+      }
       setStatus(
         `Solved. ${result.assignments.length} assignment(s) made.${lines ? `<ul>${lines}</ul>` : ""}`,
         "ok",
+      );
+    } else if (result.timedOut) {
+      // Not infeasible: HiGHS ran out of time before proving the best answer.
+      // Its unproven assignment is never accepted.
+      setStatus(
+        "Solve stopped at its time limit before it could prove the best deployment. Try the 'Class count first' emphasis or switch off 'Fewer preps' / 'Spread graduating classes' on this tab, lock more placements, or solve again.",
+        "error",
       );
     } else {
       const diagnosis = await diagnoseInfeasibility(working, model);

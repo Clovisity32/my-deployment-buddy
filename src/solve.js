@@ -28,16 +28,30 @@ const DEFAULT_OPTIONS = {
 };
 
 /**
+ * What a HiGHS status means for the app. A run that hit the time limit is
+ * neither optimal (its assignment is never accepted) nor infeasible (the
+ * hard constraints may well be satisfiable), so it gets its own flag.
+ * @param {unknown} status
+ * @returns {{optimal:boolean, timedOut:boolean}}
+ */
+function classifyStatus(status) {
+  return {
+    optimal: status === "Optimal",
+    timedOut: status === "Time limit reached",
+  };
+}
+
+/**
  * Solves a built model and returns the resulting assignments.
  * @param {import('./model.js').buildModel extends (...a:any)=>infer R ? R : never} model
  * @param {object} [options] extra/overriding HiGHS options
- * @returns {Promise<{status:string, optimal:boolean, assignments:{teacherId:string, groupId:string}[], objectiveValue:number|null, raw:any}>}
+ * @returns {Promise<{status:string, optimal:boolean, timedOut:boolean, assignments:{teacherId:string, groupId:string}[], objectiveValue:number|null, raw:any}>}
  */
 async function solveModel(model, options = {}) {
   const highs = await getHighs();
   const result = highs.solve(model.lp, { ...DEFAULT_OPTIONS, ...options });
 
-  const optimal = result.Status === "Optimal";
+  const { optimal, timedOut } = classifyStatus(result.Status);
   const assignments = [];
   if (optimal) {
     for (const [varName, pair] of model.pairByVarName) {
@@ -51,6 +65,7 @@ async function solveModel(model, options = {}) {
   return {
     status: result.Status,
     optimal,
+    timedOut,
     assignments,
     objectiveValue:
       typeof result.ObjectiveValue === "number" ? result.ObjectiveValue : null,
@@ -58,4 +73,4 @@ async function solveModel(model, options = {}) {
   };
 }
 
-export { solveModel, getHighs, DEFAULT_OPTIONS };
+export { solveModel, classifyStatus, getHighs, DEFAULT_OPTIONS };

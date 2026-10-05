@@ -123,6 +123,28 @@ test.describe("Fairness - Solve tab", () => {
     expect(f.preset).toBe("balanced");
   });
 
+  test("the status follows a preset changed elsewhere (undo, restore, co-HOD)", async ({
+    page,
+  }) => {
+    await loadSample(page);
+    await openSolve(page);
+    await page.click('#fairness [data-preset="balanced"]');
+    const status = page.locator('#fairness [data-role="fairness-status"]');
+    await expect(status).toContainText("set to Balanced");
+    await writeStoredData(page, (data) => ({
+      ...data,
+      settings: {
+        ...(data.settings || {}),
+        fairness: { preset: "fewerPreps" },
+      },
+    }));
+    await expect(
+      page.locator('#fairness [data-preset="fewerPreps"]'),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(status).toContainText("Fewer preps");
+    await expect(status).not.toContainText("Balanced");
+  });
+
   test("moving a slider switches to Custom and saves the levels", async ({
     page,
   }) => {
@@ -153,7 +175,9 @@ test.describe("Fairness - Solve tab", () => {
       const card = page.locator(`#layers-list [data-layer-id="${id}"]`);
       await expect(card.locator(".weight-field")).toHaveCount(0);
       if (id === "placeholder") {
-        await expect(card).toContainText("Always kept above");
+        await expect(card).toContainText(
+          "Always kept above the fairness priorities, so a placeholder is practically never used just to even out loads.",
+        );
       } else {
         await expect(card).toContainText("Fairness emphasis");
       }

@@ -131,7 +131,15 @@ test("the new fields survive an Excel round trip", () => {
       levels: { classCount: 5, mix: 4, preps: 1, graduating: 2 },
     },
   };
-  const out = sheetsToData(dataToSheets(d));
+  const sheets = dataToSheets(d);
+  // Target classes comes after the existing count columns, not among them.
+  assert.deepEqual(Object.keys(sheets.Teachers[0]).slice(4, 8), [
+    "bigCount",
+    "smallCount",
+    "maxGroups",
+    "targetClasses",
+  ]);
+  const out = sheetsToData(sheets);
   assert.equal(out.roles.find((r) => r.id === "teacher").fillToCap, true);
   assert.equal(out.teachers.find((t) => t.id === "t1").targetClasses, 4);
   assert.deepEqual(out.settings.fairness, d.settings.fairness);

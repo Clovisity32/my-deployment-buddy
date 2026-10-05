@@ -1,10 +1,15 @@
 // L-classCount (soft): each real teacher should hold about their ideal number
 // of classes (src/fairness.js idealClassCounts: typed target, else fill-to-cap
-// role, else cap share). Per teacher, dev >= |classes - ideal| via two rows;
-// the objective is weight x dev, so the weight is "cost per class off ideal".
+// role, else cap share, never above what the teacher can reach).
+// Per teacher the deviation |classes - ideal| is split in two tiers:
+// cc_near_<n> (the first class off ideal, at most 1) and cc_far_<n> (anything
+// beyond). The objective is weight x near + 2 x weight x far, so the first
+// class off ideal costs `weight` and each further class costs double: any
+// slack is spread evenly instead of piled on one teacher.
 // A team-taught group is one variable per teacher, so it counts once for each.
-// The dev variables are not declared Binary, so they stay continuous and >= 0
-// (same as mix.js). Placeholders and teachers with no eligible group are skipped.
+// The near/far variables are not declared Binary, so they stay continuous and
+// >= 0 (same as mix.js). Placeholders and teachers with no eligible group are
+// skipped.
 
 import { idealClassCounts } from "../fairness.js";
 
@@ -30,20 +35,30 @@ const classCountLayer = {
       }
       if (terms.length === 0) continue;
       const ideal = ideals.get(t.id);
-      const dev = `cc_dev_${n++}`;
+      const near = `cc_near_${n}`;
+      const far = `cc_far_${n}`;
+      n++;
+      // sum - near - far <= ideal  and  sum + near + far >= ideal
       ctx.addConstraint(
         `classCount_hi_${t.id}`,
-        [...terms, { coef: -1, varName: dev }],
+        [...terms, { coef: -1, varName: near }, { coef: -1, varName: far }],
         "<=",
         ideal,
       );
       ctx.addConstraint(
         `classCount_lo_${t.id}`,
-        [...terms, { coef: 1, varName: dev }],
+        [...terms, { coef: 1, varName: near }, { coef: 1, varName: far }],
         ">=",
         ideal,
       );
-      ctx.addObjectiveTerm(weight, dev);
+      ctx.addConstraint(
+        `classCount_near_${t.id}`,
+        [{ coef: 1, varName: near }],
+        "<=",
+        1,
+      );
+      ctx.addObjectiveTerm(weight, near);
+      ctx.addObjectiveTerm(2 * weight, far);
     }
   },
 };

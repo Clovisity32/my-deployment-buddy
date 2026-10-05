@@ -40,21 +40,23 @@ test("no assignments means no report, and bad input never throws", () => {
 });
 
 test("class count: names the largest gap from ideal", () => {
+  // Ideal 2 each: Amy +2 is the one clear largest gap (Ben and Cal are -1).
   const d = {
     roles,
-    teachers: [teacher("a", "Amy"), teacher("b", "Ben")],
-    groups: [1, 2, 3, 4].map((i) => group(`g${i}`, 3)),
+    teachers: [teacher("b", "Ben"), teacher("a", "Amy"), teacher("c", "Cal")],
+    groups: [1, 2, 3, 4, 5, 6].map((i) => group(`g${i}`, 3)),
     assignments: [
       asg("a", "g1"),
       asg("a", "g2"),
       asg("a", "g3"),
-      asg("b", "g4"),
+      asg("a", "g4"),
+      asg("b", "g5"),
+      asg("c", "g6"),
     ],
   };
   const t = text(fairnessReport(d), "classCount");
-  assert.match(t, /Class count/);
-  assert.match(t, /Amy/);
-  assert.match(t, /\+1/); // 3 classes vs an ideal of 2
+  assert.match(t, /within 2 class\(es\)/);
+  assert.match(t, /the largest gap is Amy at \+2\./);
 });
 
 test("class count: perfectly even says everyone is on their ideal", () => {
@@ -106,8 +108,7 @@ test("preps: the most any teacher holds, by subject, stream and level", () => {
     assignments: [asg("a", "g3"), asg("a", "g4"), asg("a", "g3b")],
   };
   const t = text(fairnessReport(d), "preps");
-  assert.match(t, /2/);
-  assert.match(t, /Amy/);
+  assert.match(t, /is 2 \(Amy\)/);
 });
 
 test("graduating: names anyone above the preferred 2", () => {
@@ -127,18 +128,42 @@ test("graduating: names anyone above the preferred 2", () => {
   assert.match(text(fairnessReport(calm), "graduating"), /nobody is above 2/i);
 });
 
-test("placeholder-only assignments and a team-taught group do not crash and are not blamed on a placeholder", () => {
+test("a team-taught group counts once per teacher, and a placeholder is never blamed", () => {
+  // One team-taught group (2 seats) held by Amy and Ben: one class each, on ideal.
   const d = {
     roles,
     teachers: [
       teacher("a", "Amy"),
+      teacher("b", "Ben"),
       teacher("p", "New Teacher", { isPlaceholder: true }),
     ],
     groups: [group("g1", 3, 6, { teachersNeeded: 2 })],
-    assignments: [asg("a", "g1"), asg("p", "g1")],
+    assignments: [asg("a", "g1"), asg("b", "g1")],
   };
   const report = fairnessReport(d);
+  assert.equal(
+    text(report, "classCount"),
+    "Class count: everyone is on their ideal number of classes.",
+  );
+  assert.match(text(report, "preps"), /is 1 \(Amy\)/);
   for (const r of report) assert.equal(r.text.includes("New Teacher"), false);
   const onlyP = { ...d, assignments: [asg("p", "g1")] };
   assert.doesNotThrow(() => fairnessReport(onlyP));
+});
+
+test("null or malformed entries in groups, assignments and teachers never throw", () => {
+  const d = {
+    roles,
+    teachers: [null, 7, teacher("a", "Amy")],
+    groups: [null, "x", group("g1", 3)],
+    assignments: [null, 5, asg("a", "g1")],
+  };
+  assert.doesNotThrow(() => fairnessReport(d));
+  assert.doesNotThrow(() =>
+    fairnessReport({
+      groups: [null, group("g1", 3)],
+      assignments: [null, asg("a", "g1")],
+    }),
+  );
+  assert.match(text(fairnessReport(d), "preps"), /is 1 \(Amy\)/);
 });

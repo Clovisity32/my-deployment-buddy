@@ -49,16 +49,16 @@ The hard rules (caps, qualification, form teacher, deny list, graduating maximum
 
 ### 2. Ideal class counts (`idealClassCounts(data)` in new `src/fairness.js`)
 
-Let `seats` be the total of `teachersNeeded` over all groups, and `avgP` the average periods per seat.
+Let `seats` be the total of `teachersNeeded` over all groups, and `avgP` the average periods per seat. Each teacher's **reachable count** is the number of groups they are qualified for and not denied (a team-taught group counts once), capped by `maxGroups` when set and by `bigCount + smallCount` when both are set. No ideal is ever above the reachable count.
 
-1. A teacher with `targetClasses` set uses that number (soft: it is an ideal, not a rule).
-2. A teacher whose role has `fillToCap` uses `cap / avgP`.
-3. The remaining seats (`seats` minus the sums from 1 and 2, floored at 0) are shared among all other non-placeholder teachers in proportion to cap.
-4. Placeholder teachers and teachers with no eligible pair are skipped. If every teacher is covered by 1 or 2, nothing is shared.
+1. A teacher with `targetClasses` set uses that number, capped at their reachable count (soft: it is an ideal, not a rule).
+2. A teacher whose role has `fillToCap` uses `cap / avgP`, capped at their reachable count.
+3. The remaining seats (`seats` minus the sums from 1 and 2, floored at 0) are shared among all other non-placeholder teachers in proportion to cap, water-filled: anyone whose share is above their reachable count gets exactly that count and leaves the pool, and the rest is re-shared among the others until nobody is above.
+4. Placeholder teachers, teachers with no cap and teachers whose reachable count is 0 are skipped. If every teacher is covered by 1 or 2, nothing is shared.
 
 ### 3. `classCount` layer (`src/layers/classCount.js`)
 
-Soft, default weight from the fairness setting. Per teacher with an ideal `I` and a variable-set `Σx` over their eligible groups: rows `classCount_hi_<teacherId>`: `Σx − dev ≤ I` and `classCount_lo_<teacherId>`: `Σx + dev ≥ I`, objective `weight × dev`. The `dev` variables are continuous and ≥ 0 (not declared Binary), as in `mix.js`. A team-taught group is one variable per teacher, so it counts once for each.
+Soft, default weight from the fairness setting. Per teacher with an ideal `I` and a variable-set `Σx` over their eligible groups, the deviation has two tiers: `near` (the first class off ideal) and `far` (anything beyond one class). Rows `classCount_hi_<teacherId>`: `Σx − near − far ≤ I`, `classCount_lo_<teacherId>`: `Σx + near + far ≥ I` and `classCount_near_<teacherId>`: `near ≤ 1`; objective `weight × near + 2 × weight × far`. So the first class off ideal costs `w` and each further class `2w`, which spreads any slack evenly instead of piling it on one teacher. The `near`/`far` variables are continuous and ≥ 0 (not declared Binary), as in `mix.js`. A team-taught group is one variable per teacher, so it counts once for each.
 
 ### 4. Fairness emphasis (`src/fairness.js` and the Solve tab)
 
@@ -117,6 +117,8 @@ Found while reading the code during planning:
 1. **Placeholder avoidance always outranks the fairness weights.** `fairnessWeights` also returns `placeholder` = 10 x the largest of the four fairness weights, and `buildModel` uses it for the `placeholder` layer. The placeholder layer's weight box is replaced by a note, and its saved weight is ignored.
 2. **Test fixtures gained an `only(layerId, level)` helper** in `tests/unit/layers/rulesFixture.js`, and the existing layer tests were migrated off `layerSettings` weights (those are now ignored for the four fairness layers).
 3. **Weight resolution:** the four fairness layers and `placeholder` always take their weight from `settings.fairness` (or the `classCountFirst` default). The on/off toggle still comes from `layerSettings`.
+4. **Reachable counts** (final review): a fill-to-cap ideal of `cap / avgP` could overstate what a teacher can hold (qualifications, deny rules, `maxGroups`, fixed big/small counts). The leftover seats then shrank, every ordinary teacher sat above their ideal, and the class-count term stopped caring how classes were shared (a repro gave 1/1/4 instead of 2/2/2). Ideals are now capped at each teacher's reachable count, teachers who can reach no group are left out, and the shares are water-filled.
+5. **Two-tier deviation** (final review): the single `dev` per teacher became `near` (bounded at 1 by a row, weight `w`) and `far` (weight `2w`), so leftover slack is spread evenly. The placeholder weight is unchanged (10x the largest fairness weight, still 5x the marginal `2w`).
 
 Also:
 

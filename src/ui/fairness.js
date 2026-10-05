@@ -3,7 +3,7 @@
 // slider mid-drag is never replaced by a re-render. Slider changes use the
 // `change` event (fires on release), presets use click.
 
-import { getData, setData } from "./store.js";
+import { getData, isBlocked, setData } from "./store.js";
 import { FAIRNESS_PRESETS, fairnessSettings } from "../data.js";
 
 const LABELS = {
@@ -29,19 +29,35 @@ function renderFairness() {
     if (out) out.textContent = `step ${levels[input.dataset.key]} of 5`;
   }
   const status = root.querySelector('[data-role="fairness-status"]');
-  if (status && !status.dataset.touched)
+  if (!status) return;
+  // An undo, a version restore, an Excel import or a co-HOD's change can swap
+  // the preset under a "set to X" message: drop the message when it no longer
+  // matches what is pressed.
+  if (status.dataset.touched && status.dataset.announced !== preset) {
+    delete status.dataset.touched;
+    delete status.dataset.announced;
+  }
+  if (!status.dataset.touched)
     status.textContent = `Current emphasis: ${LABELS[preset]}.`;
 }
 
 function save(root, preset, levels, message) {
+  const status = root.querySelector('[data-role="fairness-status"]');
+  if (isBlocked()) {
+    // The store ignores writes once the session is blocked.
+    if (status)
+      status.textContent =
+        "Your change was not saved because this page is out of date. Reload the page to continue.";
+    return;
+  }
   const data = getData();
   setData({
     ...data,
     settings: { ...(data.settings || {}), fairness: { preset, levels } },
   });
-  const status = root.querySelector('[data-role="fairness-status"]');
   if (status) {
     status.dataset.touched = "1";
+    status.dataset.announced = preset;
     status.textContent = message;
   }
 }

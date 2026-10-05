@@ -189,9 +189,14 @@ test("fairness layer weights come from the Fairness emphasis, not from layerSett
   };
   data.layerSettings = [{ id: "classCount", enabled: true, weight: 999 }];
   const model = buildModel(data);
-  const dev = model.objectiveTerms.find((t) => t.varName.startsWith("cc_dev_"));
-  assert.ok(dev, "expected a classCount deviation term");
-  assert.equal(dev.coef, 1); // level 1 -> weight 1, the saved 999 is ignored
+  const near = model.objectiveTerms.find((t) =>
+    t.varName.startsWith("cc_near_"),
+  );
+  assert.ok(near, "expected a classCount near-deviation term");
+  assert.equal(near.coef, 1); // level 1 -> weight 1, the saved 999 is ignored
+  const far = model.objectiveTerms.find((t) => t.varName.startsWith("cc_far_"));
+  assert.ok(far, "expected a classCount far-deviation term");
+  assert.equal(far.coef, 2); // each class beyond the first costs double
 });
 
 test("mix, preps and graduatingSpread weights also come from the Fairness emphasis", () => {

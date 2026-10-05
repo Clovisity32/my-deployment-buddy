@@ -7,6 +7,7 @@ import {
   effectiveCap,
   fairnessSettings,
   graduatingSettings,
+  isDenied,
   prepKey,
   roleFillsToCap,
 } from "./data.js";
@@ -42,21 +43,45 @@ function fairnessWeights(data) {
 }
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+const isObj = (v) => Boolean(v) && typeof v === "object";
 
 /**
- * The ideal number of classes for each real teacher:
- *  1. a typed `targetClasses` is used as-is;
- *  2. a teacher whose role is "fill to cap" gets cap / (average periods per seat);
+ * How many classes this teacher could hold at most: groups they are qualified
+ * for and not denied (a team-taught group counts once), capped by maxGroups
+ * and by bigCount + smallCount when both are set.
+ * @param {any} t
+ * @param {any[]} groups
+ * @returns {number}
+ */
+function reachableCount(t, groups) {
+  const quals = Array.isArray(t?.qualifications) ? t.qualifications : [];
+  let n = 0;
+  for (const g of groups) {
+    if (g && g.subjectId && quals.includes(g.subjectId) && !isDenied(t, g)) n++;
+  }
+  if (isNum(t?.maxGroups)) n = Math.min(n, Math.max(0, t.maxGroups));
+  if (isNum(t?.bigCount) && isNum(t?.smallCount))
+    n = Math.min(n, Math.max(0, t.bigCount + t.smallCount));
+  return n;
+}
+
+/**
+ * The ideal number of classes for each real teacher, never above what the
+ * teacher can reach (see reachableCount):
+ *  1. a typed `targetClasses` (capped at reach);
+ *  2. a teacher whose role is "fill to cap" gets cap / (average periods per
+ *     seat), capped at reach;
  *  3. the remaining seats (never below 0) are shared by everyone else in
- *     proportion to cap.
+ *     proportion to cap, water-filled: anyone whose share exceeds their reach
+ *     gets exactly their reach and the rest is re-shared among the others.
  * A team-taught group is one seat per teacher it needs. Placeholder teachers,
- * teachers with no cap and teachers qualified for none of the groups are left out.
+ * teachers with no cap and teachers who can reach no group are left out.
  * @param {any} data
  * @returns {Map<string, number>}
  */
 function idealClassCounts(data) {
   const out = new Map();
-  const groups = Array.isArray(data?.groups) ? data.groups : [];
+  const groups = (Array.isArray(data?.groups) ? data.groups : []).filter(isObj);
   const teachers = Array.isArray(data?.teachers) ? data.teachers : [];
   const roles = Array.isArray(data?.roles) ? data.roles : [];
 
@@ -71,24 +96,28 @@ function idealClassCounts(data) {
   if (seats === 0) return out;
   const avgPeriods = seatPeriods / seats;
 
-  const subjects = new Set(groups.map((g) => g?.subjectId).filter(Boolean));
-  const members = teachers.filter((t) => {
-    if (!t || t.isPlaceholder) return false;
-    if (!(effectiveCap(data, t) > 0)) return false;
-    return (Array.isArray(t.qualifications) ? t.qualifications : []).some((s) =>
-      subjects.has(s),
-    );
-  });
+  const reach = new Map();
+  const members = [];
+  for (const t of teachers) {
+    if (!isObj(t) || t.isPlaceholder) continue;
+    if (!(effectiveCap(data, t) > 0)) continue;
+    const r = reachableCount(t, groups);
+    if (r <= 0) continue;
+    reach.set(t.id, r);
+    members.push(t);
+  }
 
   const roleById = new Map(roles.map((r) => [r?.id, r]));
   let fixed = 0;
-  const sharers = [];
+  let sharers = [];
   for (const t of members) {
+    const r = reach.get(t.id);
     if (isNum(t.targetClasses) && t.targetClasses >= 0) {
-      out.set(t.id, t.targetClasses);
-      fixed += t.targetClasses;
+      const ideal = Math.min(t.targetClasses, r);
+      out.set(t.id, ideal);
+      fixed += ideal;
     } else if (roleFillsToCap(roleById.get(t.roleId)) && avgPeriods > 0) {
-      const ideal = effectiveCap(data, t) / avgPeriods;
+      const ideal = Math.min(effectiveCap(data, t) / avgPeriods, r);
       out.set(t.id, ideal);
       fixed += ideal;
     } else {
@@ -96,10 +125,23 @@ function idealClassCounts(data) {
     }
   }
 
-  const rest = Math.max(0, seats - fixed);
-  const capSum = sharers.reduce((sum, t) => sum + effectiveCap(data, t), 0);
-  for (const t of sharers) {
-    out.set(t.id, capSum > 0 ? (rest * effectiveCap(data, t)) / capSum : 0);
+  // Water-filling: share the rest by cap; anyone whose share is above their
+  // reach takes exactly their reach and leaves the pool; repeat.
+  let rest = Math.max(0, seats - fixed);
+  for (;;) {
+    const capSum = sharers.reduce((sum, t) => sum + effectiveCap(data, t), 0);
+    const share = (t) =>
+      capSum > 0 ? (rest * effectiveCap(data, t)) / capSum : 0;
+    const capped = sharers.filter((t) => share(t) > reach.get(t.id));
+    if (capped.length === 0) {
+      for (const t of sharers) out.set(t.id, share(t));
+      break;
+    }
+    for (const t of capped) {
+      out.set(t.id, reach.get(t.id));
+      rest = Math.max(0, rest - reach.get(t.id));
+    }
+    sharers = sharers.filter((t) => !capped.includes(t));
   }
   return out;
 }
@@ -114,11 +156,14 @@ const signed = (n) => `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}`;
  * @returns {{key:"classCount"|"mix"|"preps"|"graduating", text:string}[]}
  */
 function fairnessReport(data) {
+  // Null or non-object entries (a damaged save) are skipped, never read.
   const teachers = (Array.isArray(data?.teachers) ? data.teachers : []).filter(
-    (t) => t && !t.isPlaceholder,
+    (t) => isObj(t) && !t.isPlaceholder,
   );
-  const groups = Array.isArray(data?.groups) ? data.groups : [];
-  const assignments = Array.isArray(data?.assignments) ? data.assignments : [];
+  const groups = (Array.isArray(data?.groups) ? data.groups : []).filter(isObj);
+  const assignments = (
+    Array.isArray(data?.assignments) ? data.assignments : []
+  ).filter(isObj);
   if (assignments.length === 0 || teachers.length === 0) return [];
 
   const groupById = new Map(groups.map((g) => [g.id, g]));
