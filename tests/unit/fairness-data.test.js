@@ -163,3 +163,10 @@ test("an old file gains no new keys through an Excel round trip", () => {
   );
   assert.equal(roleFillsToCap(old.roles.find((r) => r.id === "hod")), true);
 });
+
+test("only own keys of FAIRNESS_PRESETS are valid preset names", () => {
+  const d = sample();
+  d.settings = { ...(d.settings || {}), fairness: { preset: "constructor" } };
+  assert.equal(fairnessSettings(d).preset, "classCountFirst");
+  assert.ok(validate(d).some((e) => e.includes("settings.fairness.preset")));
+});

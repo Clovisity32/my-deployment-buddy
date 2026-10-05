@@ -94,7 +94,8 @@ function levelOr(v, fallback) {
 function fairnessSettings(data) {
   const f = data?.settings?.fairness;
   const preset =
-    f && (f.preset === "custom" || FAIRNESS_PRESETS[f.preset])
+    f &&
+      (f.preset === "custom" || Object.hasOwn(FAIRNESS_PRESETS, f.preset))
       ? f.preset
       : "classCountFirst";
   if (preset !== "custom")
@@ -613,7 +614,7 @@ function validate(data) {
           if (
             typeof f.preset !== "undefined" &&
             f.preset !== "custom" &&
-            !FAIRNESS_PRESETS[f.preset]
+            !Object.hasOwn(FAIRNESS_PRESETS, f.preset)
           )
             errors.push(
               `settings.fairness.preset must be "custom" or one of: ${Object.keys(FAIRNESS_PRESETS).join(", ")}.`,
