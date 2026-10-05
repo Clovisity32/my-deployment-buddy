@@ -4,9 +4,11 @@
 
 import { getData, setData } from "./store.js";
 import { esc, genId, isBlankNumberInput } from "./dom.js";
+import { roleFillsToCap } from "../data.js";
 
 // Optional per-teacher group-count rules; blank = no rule (stored as null).
-const COUNT_FIELDS = ["bigCount", "smallCount", "maxGroups"];
+const COUNT_FIELDS = ["bigCount", "smallCount", "maxGroups", "targetClasses"];
+const PLACEHOLDER = { targetClasses: "auto" };
 
 function renderTeachers() {
   renderRoles();
@@ -28,6 +30,7 @@ function renderRoles() {
           ? '<span class="muted">(per-teacher)</span>'
           : `<input data-field="maxPeriods" type="number" min="0" value="${esc(r.maxPeriods)}" style="width:6em" />`
       }</td>
+      <td style="text-align:center"><input data-field="fillToCap" type="checkbox" ${roleFillsToCap(r) ? "checked" : ""} /></td>
     </tr>
   `,
     )
@@ -43,7 +46,7 @@ function renderTeacherTable() {
 
   if ((data.teachers || []).length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="8">No teachers yet - add one, or load the sample school.</td></tr>';
+      '<tr><td colspan="9">No teachers yet - add one, or load the sample school.</td></tr>';
     return;
   }
 
@@ -63,7 +66,7 @@ function renderTeacherTable() {
           </select>
         </td>
         <td>${capCell}</td>
-        ${COUNT_FIELDS.map((f) => `<td><input data-field="${f}" data-blank-ok type="number" min="0" step="1" placeholder="any" style="width:5em" value="${esc(t[f] ?? "")}" /></td>`).join("")}
+        ${COUNT_FIELDS.map((f) => `<td><input data-field="${f}" data-blank-ok type="number" min="0" step="1" placeholder="${PLACEHOLDER[f] ?? "any"}" style="width:5em" value="${esc(t[f] ?? "")}" /></td>`).join("")}
         <td style="text-align:center"><input data-field="isPlaceholder" type="checkbox" ${t.isPlaceholder ? "checked" : ""} /></td>
         <td><button data-action="delete-teacher" title="Remove teacher">×</button></td>
       </tr>
@@ -157,6 +160,7 @@ function wireRoles() {
     const data = getData();
     const roles = data.roles.map((r) => {
       if (r.id !== id) return r;
+      if (field === "fillToCap") return { ...r, fillToCap: e.target.checked };
       if (field === "maxPeriods")
         return { ...r, maxPeriods: Number(e.target.value) || 0 };
       return { ...r, [field]: e.target.value };
@@ -181,6 +185,7 @@ function wireTeacherTable() {
           bigCount: null,
           smallCount: null,
           maxGroups: null,
+          targetClasses: null,
           qualifications: [],
           isPlaceholder: false,
         },
