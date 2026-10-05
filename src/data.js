@@ -2,7 +2,7 @@
 // src/ui/store.js (Firestore-backed). Pure functions where possible so
 // they're easy to unit test without a browser.
 
-/** @typedef {{id:string, name:string, maxPeriods:number|null}} Role */
+/** @typedef {{id:string, name:string, maxPeriods:number|null, fillToCap?:boolean}} Role */
 /** @typedef {{id:string, name:string, discipline:string, stream:string, periods:number, levels:number[]}} Subject */
 /** @typedef {{level?:number, stream?:string, subjectId?:string}} Deny */
 /** @typedef {{level:number, classRef:string, subjectId:string, teacherId:string, applied?:boolean}} LastYearRow */
@@ -10,7 +10,7 @@
 /** @typedef {{subjectId:string, groups:number}} BandSubject */
 /** @typedef {{id:string, name:string, classIds:string[], subjects:BandSubject[], note:string}} Band */
 /** @typedef {{label?:string, teachersNeeded?:number, note?:string}} GroupOverride */
-/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean, bigCount?:number|null, smallCount?:number|null, maxGroups?:number|null, denies?:Deny[]}} Teacher */
+/** @typedef {{id:string, name:string, roleId:string, capOverride:number|null, qualifications:string[], isPlaceholder?:boolean, bigCount?:number|null, smallCount?:number|null, maxGroups?:number|null, targetClasses?:number|null, denies?:Deny[]}} Teacher */
 /**
  * @typedef {{
  *   id:string, level:number, block:string, label:string, periods:number,
@@ -70,6 +70,51 @@ function graduatingSettings(data) {
     max,
   );
   return { levels, max, prefer };
+}
+
+const FAIRNESS_PRESETS = {
+  classCountFirst: { classCount: 5, mix: 4, preps: 3, graduating: 2 },
+  balanced: { classCount: 4, mix: 4, preps: 3, graduating: 3 },
+  fewerPreps: { classCount: 4, mix: 3, preps: 5, graduating: 2 },
+};
+const FAIRNESS_KEYS = ["classCount", "mix", "preps", "graduating"];
+
+/** @param {any} v @param {number} fallback  a whole number 1..5, else the fallback */
+function levelOr(v, fallback) {
+  return Number.isInteger(v) ? Math.min(5, Math.max(1, v)) : fallback;
+}
+
+/**
+ * The fairness emphasis: a preset name (or "custom") and the four 1-5 levels.
+ * Missing or nonsensical input falls back to "classCountFirst", so old files
+ * behave exactly like the default preset.
+ * @param {any} data
+ * @returns {{preset:string, levels:{classCount:number, mix:number, preps:number, graduating:number}}}
+ */
+function fairnessSettings(data) {
+  const f = data?.settings?.fairness;
+  const preset =
+    f && (f.preset === "custom" || FAIRNESS_PRESETS[f.preset])
+      ? f.preset
+      : "classCountFirst";
+  if (preset !== "custom")
+    return { preset, levels: { ...FAIRNESS_PRESETS[preset] } };
+  const base = FAIRNESS_PRESETS.classCountFirst;
+  const levels = {};
+  for (const k of FAIRNESS_KEYS) levels[k] = levelOr(f?.levels?.[k], base[k]);
+  return { preset, levels };
+}
+
+/**
+ * Should this role be filled close to its cap? An explicit boolean wins;
+ * otherwise the HOD and SH/ST roles default to true.
+ * @param {any} role
+ * @returns {boolean}
+ */
+function roleFillsToCap(role) {
+  if (!role || typeof role !== "object") return false;
+  if (typeof role.fillToCap === "boolean") return role.fillToCap;
+  return role.id === "hod" || role.id === "sh_st";
 }
 
 /**
@@ -252,6 +297,11 @@ function validate(data) {
           errors.push(`roles[${i}].name must be a non-empty string.`);
         if (r.maxPeriods !== null && typeof r.maxPeriods !== "number")
           errors.push(`roles[${i}].maxPeriods must be a number or null.`);
+        if (
+          typeof r.fillToCap !== "undefined" &&
+          typeof r.fillToCap !== "boolean"
+        )
+          errors.push(`roles[${i}].fillToCap must be true or false.`);
       });
     }
   }
@@ -397,7 +447,12 @@ function validate(data) {
         !Array.isArray(t.qualifications)
       )
         errors.push(`teachers[${i}].qualifications must be an array.`);
-      for (const field of ["bigCount", "smallCount", "maxGroups"]) {
+      for (const field of [
+        "bigCount",
+        "smallCount",
+        "maxGroups",
+        "targetClasses",
+      ]) {
         const v = t[field];
         if (
           typeof v !== "undefined" &&
@@ -550,6 +605,37 @@ function validate(data) {
         )
           errors.push(`settings.${field} must be a whole number of 0 or more.`);
       }
+      if (typeof s.fairness !== "undefined") {
+        const f = s.fairness;
+        if (!f || typeof f !== "object" || Array.isArray(f)) {
+          errors.push("settings.fairness must be an object.");
+        } else {
+          if (
+            typeof f.preset !== "undefined" &&
+            f.preset !== "custom" &&
+            !FAIRNESS_PRESETS[f.preset]
+          )
+            errors.push(
+              `settings.fairness.preset must be "custom" or one of: ${Object.keys(FAIRNESS_PRESETS).join(", ")}.`,
+            );
+          if (typeof f.levels !== "undefined") {
+            const ok =
+              f.levels &&
+              typeof f.levels === "object" &&
+              FAIRNESS_KEYS.every(
+                (k) =>
+                  typeof f.levels[k] === "undefined" ||
+                  (Number.isInteger(f.levels[k]) &&
+                    f.levels[k] >= 1 &&
+                    f.levels[k] <= 5),
+              );
+            if (!ok)
+              errors.push(
+                "settings.fairness.levels must be whole numbers from 1 to 5.",
+              );
+          }
+        }
+      }
       if (
         Number.isInteger(s.maxGraduating) &&
         Number.isInteger(s.preferGraduating) &&
@@ -701,6 +787,9 @@ export {
   bigThreshold,
   DEFAULT_BIG_PERIODS,
   graduatingSettings,
+  FAIRNESS_PRESETS,
+  fairnessSettings,
+  roleFillsToCap,
   prepKey,
   isDenied,
   formatDeny,

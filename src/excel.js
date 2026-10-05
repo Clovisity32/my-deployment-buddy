@@ -109,6 +109,7 @@ function dataToSheets(data) {
       id: r.id,
       name: r.name,
       maxPeriods: r.maxPeriods ?? "",
+      fillToCap: r.fillToCap === undefined ? "" : Boolean(r.fillToCap),
     })),
     Subjects: (data.subjects || []).map((s) => ({
       id: s.id,
@@ -140,6 +141,7 @@ function dataToSheets(data) {
       roleId: t.roleId,
       capOverride: t.capOverride ?? "",
       bigCount: t.bigCount ?? "",
+      targetClasses: t.targetClasses ?? "",
       smallCount: t.smallCount ?? "",
       maxGroups: t.maxGroups ?? "",
       denies: (t.denies || []).map(formatDeny).join("; "),
@@ -197,6 +199,24 @@ function dataToSheets(data) {
         : []),
       ...(data.settings && data.settings.preferGraduating !== undefined
         ? [{ key: "preferGraduating", value: data.settings.preferGraduating }]
+        : []),
+      ...(data.settings && data.settings.fairness
+        ? [
+            {
+              key: "fairnessPreset",
+              value: data.settings.fairness.preset ?? "classCountFirst",
+            },
+            ...(data.settings.fairness.levels
+              ? [
+                  {
+                    key: "fairnessLevels",
+                    value: ["classCount", "mix", "preps", "graduating"]
+                      .map((k) => data.settings.fairness.levels[k] ?? "")
+                      .join(", "),
+                  },
+                ]
+              : []),
+          ]
         : []),
     ],
     // Versions hold nested per-snapshot data that doesn't flatten naturally
@@ -259,6 +279,9 @@ function sheetsToData(sheets) {
       row.maxPeriods === "" || row.maxPeriods == null
         ? null
         : toNumber(row.maxPeriods),
+    ...(row.fillToCap === "" || row.fillToCap == null
+      ? {}
+      : { fillToCap: toBool(row.fillToCap) }),
   }));
 
   const subjects = (sheets.Subjects || []).map((row) => ({
@@ -300,6 +323,7 @@ function sheetsToData(sheets) {
     ...optionalCount(row, "bigCount"),
     ...optionalCount(row, "smallCount"),
     ...optionalCount(row, "maxGroups"),
+    ...optionalCount(row, "targetClasses"),
     ...denyField(row.denies),
     ...(toBool(row.isPlaceholder) ? { isPlaceholder: true } : {}),
   }));
@@ -366,6 +390,18 @@ function sheetsToData(sheets) {
   for (const key of ["maxGraduating", "preferGraduating"]) {
     const v = setting(key);
     if (v !== undefined && v !== "") settings[key] = toNumber(v);
+  }
+  const fairnessPreset = setting("fairnessPreset");
+  if (fairnessPreset !== undefined && fairnessPreset !== "") {
+    const fairness = { preset: String(fairnessPreset) };
+    const lv = setting("fairnessLevels");
+    if (lv !== undefined && lv !== "") {
+      const nums = splitList(lv).map(Number);
+      const keys = ["classCount", "mix", "preps", "graduating"];
+      if (nums.length === 4 && nums.every((n) => Number.isFinite(n)))
+        fairness.levels = Object.fromEntries(keys.map((k, i) => [k, nums[i]]));
+    }
+    settings.fairness = fairness;
   }
 
   return {
