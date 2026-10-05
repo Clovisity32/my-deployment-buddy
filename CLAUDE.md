@@ -47,7 +47,7 @@ changes.
 
 1. Copy the shape of an existing layer close to what you're adding:
    `src/layers/loadCap.js` (a simple hard per-teacher constraint) or
-   `src/layers/stable.js` (a simple soft objective-only layer) are the best
+   `src/layers/graduatingSpread.js` (a simple soft layer) are the best
    templates.
 2. Implement the contract (see the comment block at the top of
    `src/layers/registry.js`):
@@ -74,6 +74,7 @@ changes.
    `LAYERS` array. Order only affects the readability of the generated LP.
 4. Add a default entry to `layerSettings` in `sample/sample.json` so the
    Layers tab has something sensible to show (`{ id, enabled: true, weight }`).
+   Soft layers that are part of the fairness emphasis (`classCount`, `mix`, `preps`, `graduatingSpread`) take their weight from `src/fairness.js`, not from `layerSettings`; add the layer id to `FAIRNESS_KEY_BY_LAYER` if you add another one.
 5. **Constraint names must stay ASCII-identifier-safe conceptually** (letters/
    digits/underscore) even though `model.js` sanitizes them for you when
    writing the LP text — keep the `<layerId>_<entityId>` convention so
@@ -99,6 +100,7 @@ changes.
 | File                     | Responsibility                                                                                                                                          |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/data.js`            | Schema and `validate()`. All fail-safe (never throws). Persistence lives in `src/ui/store.js` (Firestore-backed).                                       |
+| `src/fairness.js`        | Pure: fairness weights, ideal class counts and the post-Solve report; used by `src/model.js`, `src/layers/classCount.js` and the Solve tab.             |
 | `src/layers/registry.js` | Ordered list of layers + the contract they implement.                                                                                                   |
 | `src/layers/*.js`        | One constraint/objective concern each.                                                                                                                  |
 | `src/model.js`           | Pure: `data` + enabled layers → CPLEX-LP text. Unit-testable without a browser.                                                                         |
