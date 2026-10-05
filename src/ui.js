@@ -41,6 +41,8 @@ import { renderBands, wireBands } from "./ui/bands.js";
 import { wireRebuildButtons } from "./ui/rebuild.js";
 import { renderTeachers, wireTeachers } from "./ui/teachers.js";
 import { wireIntake } from "./ui/intake.js";
+import { renderFairness, wireFairness } from "./ui/fairness.js";
+import { FAIRNESS_KEY_BY_LAYER, fairnessReport } from "./fairness.js";
 import {
   renderBoard,
   wireBoard,
@@ -97,13 +99,17 @@ function renderLayers() {
           </div>
           <p>${esc(layer.describe(data))}</p>
           ${
-            layer.kind === "soft"
-              ? `
+            layer.kind === "soft" && FAIRNESS_KEY_BY_LAYER[layer.id]
+              ? `<p class="muted">Weight set by Fairness emphasis (above).</p>`
+              : layer.id === "placeholder"
+                ? `<p class="muted">Always kept above the fairness priorities, so a placeholder is practically never used just to even out loads.</p>`
+                : layer.kind === "soft"
+                  ? `
             <div class="weight-field">
               <label>Weight</label>
               <input type="number" min="0" step="0.5" data-action="weight-layer" value="${esc(weight)}" />
             </div>`
-              : ""
+                  : ""
           }
         </div>
       </div>
@@ -184,17 +190,33 @@ async function onSolve() {
       // last durable in Firestore - without this await, setData()'s write
       // is still in flight (fire-and-forget) when "Solved" appears, and an
       // immediate reload can race it and lose the solve.
-      recordUndoPoint(); // so the Board's Undo can reverse this solve
-      await setData({
+      const solved = {
         ...working,
         assignments: result.assignments.map((a) => ({
           ...a,
           locked: wasLocked(working, a),
         })),
-      });
+      };
+      recordUndoPoint(); // so the Board's Undo can reverse this solve
+      await setData(solved);
+      let lines = "";
+      try {
+        lines = fairnessReport(solved)
+          .map((r) => `<li>${esc(r.text)}</li>`)
+          .join("");
+      } catch {
+        lines = ""; // the report is a bonus - never let it hide a good solve
+      }
       setStatus(
-        `Solved. ${result.assignments.length} assignment(s) made.`,
+        `Solved. ${result.assignments.length} assignment(s) made.${lines ? `<ul>${lines}</ul>` : ""}`,
         "ok",
+      );
+    } else if (result.timedOut) {
+      // Not infeasible: HiGHS ran out of time before proving the best answer.
+      // Its unproven assignment is never accepted.
+      setStatus(
+        "Solve stopped at its time limit before it could prove the best deployment. Try the 'Class count first' emphasis or switch off 'Fewer preps' / 'Spread graduating classes' on this tab, lock more placements, or solve again.",
+        "error",
       );
     } else {
       const diagnosis = await diagnoseInfeasibility(working, model);
@@ -397,6 +419,7 @@ function renderAll() {
   renderBands();
   renderTeachers();
   renderLayers();
+  renderFairness();
   renderBoard();
   renderVersions();
 }
@@ -454,6 +477,7 @@ async function onSignedIn(user) {
     wireTeachers();
     wireIntake();
     wireLayers();
+    wireFairness();
     wireBoard();
     wireVersions();
     installBlankNumberRestore();

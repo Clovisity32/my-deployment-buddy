@@ -761,11 +761,6 @@
       "weight": 1
     },
     {
-      "id": "balance",
-      "enabled": true,
-      "weight": 1
-    },
-    {
       "id": "mix",
       "enabled": true,
       "weight": 1
@@ -775,11 +770,7 @@
       "enabled": true,
       "weight": 0.5
     },
-    {
-      "id": "stable",
-      "enabled": true,
-      "weight": 5
-    },
+    { "id": "classCount", "enabled": true, "weight": 1 },
     {
       "id": "placeholder",
       "enabled": true,

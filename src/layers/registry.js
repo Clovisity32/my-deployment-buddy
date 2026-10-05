@@ -37,10 +37,9 @@ import { graduatingMaxLayer } from "./graduatingMax.js";
 import { pinLayer } from "./pin.js";
 import { formTeacherLayer } from "./formTeacher.js";
 import { bandClashLayer } from "./bandClash.js";
-import { stableLayer } from "./stable.js";
 import { placeholderLayer } from "./placeholder.js";
-import { balanceLayer } from "./balance.js";
 import { mixLayer } from "./mix.js";
+import { classCountLayer } from "./classCount.js";
 import { graduatingSpreadLayer } from "./graduatingSpread.js";
 import { prepsLayer } from "./preps.js";
 
@@ -55,11 +54,10 @@ const LAYERS = [
   pinLayer,
   formTeacherLayer,
   bandClashLayer,
-  balanceLayer,
   mixLayer,
+  classCountLayer,
   graduatingSpreadLayer,
   prepsLayer,
-  stableLayer,
   placeholderLayer,
 ];
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildModel } from "../../../src/model.js";
 import { solveModel } from "../../../src/solve.js";
 import { prepKey } from "../../../src/data.js";
-import { fixture, group, teacher, OFF, ON } from "./rulesFixture.js";
+import { fixture, group, teacher, only } from "./rulesFixture.js";
 
 // Same subject at two levels: Sec 3 twice, Sec 4 twice.
 const d = () =>
@@ -20,7 +20,7 @@ const d = () =>
       group("a4x", "A", { level: 4 }),
       group("a4y", "A", { level: 4 }),
     ],
-    layerSettings: [OFF("balance"), OFF("mix"), OFF("stable"), ON("preps", 2)],
+    ...only("preps", 2),
   });
 
 test("a prep is subject + stream + level: 2 teachers x 2 levels = 4 prep switches", () => {

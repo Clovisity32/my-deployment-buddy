@@ -51,7 +51,12 @@ function makeData(t1Extra = {}, t2Extra = {}) {
       group("s2", 6),
     ],
     assignments: [],
-    layerSettings: [OFF("balance"), OFF("mix"), OFF("preps"), OFF("stable")],
+    layerSettings: [
+      OFF("mix"),
+      OFF("preps"),
+      OFF("classCount"),
+      OFF("graduatingSpread"),
+    ],
   };
 }
 
@@ -134,7 +139,11 @@ test("validate() accepts null/whole numbers and rejects the rest", () => {
 
 test("mix skips a teacher whose big/small counts are fixed", () => {
   const data = makeData({ bigCount: 1, smallCount: 1 });
-  data.layerSettings = [OFF("balance"), OFF("preps"), OFF("stable")];
+  data.layerSettings = [
+    OFF("preps"),
+    OFF("classCount"),
+    OFF("graduatingSpread"),
+  ];
   const mixRows = rows(buildModel(data), "mix_");
   assert.ok(mixRows.every((c) => !c.name.endsWith("_t1")));
   assert.ok(mixRows.some((c) => c.name.endsWith("_t2")));
